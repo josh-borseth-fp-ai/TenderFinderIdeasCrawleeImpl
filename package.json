@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "scrape:example": "bun run scripts/scrape-example.ts",
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "preview": "vite preview --port 3000",
@@ -18,6 +19,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@crawlee/memory-storage": "3.18.1",
     "@effect/ai-openrouter": "4.0.0-rc.113",
     "@effect/atom-react": "4.0.0-rc.113",
     "@effect/platform-browser": "4.0.0-rc.113",
@@ -27,7 +29,9 @@
     "@tanstack/react-start": "1.168.51",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
+    "crawlee": "3.18.1",
     "effect": "4.0.0-rc.113",
+    "ipaddr.js": "2.3.0",
     "lucide-react": "^1.44.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

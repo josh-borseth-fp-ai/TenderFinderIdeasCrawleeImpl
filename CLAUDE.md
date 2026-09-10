@@ -32,7 +32,8 @@ Env: copy `.env.example` to `.env` (`OPENROUTER_API_KEY` required; `OPENROUTER_M
 ## Architecture
 
 - `POST /api/chat` (`src/routes/api/chat.ts`) validates `ChatRequest`, runs `ChatService.stream`, and returns SSE via `src/server/Sse.ts`. Provider failures become a terminal `{"_tag":"Error"}` event, never a mid-stream 500. `GET /api/chat` returns `{ model }`.
-- `src/server/ChatService.ts#partToEvents` is the single seam mapping provider stream parts to wire events. Tool support later = new `ChatEvent` union members + a case there + a case in the client fold in `src/atoms/chat.ts`.
+- `src/server/ChatService.ts#partToEvents` maps provider stream parts to wire events. `ScrapeToolkit` provides `scrapeUrl`; request-local history carries tool results into one final model call with tool execution disabled. Tool calls/results remain server-side; SSE still uses TextDelta/Error/Done.
+- `Scraper` wraps Crawlee's CheerioCrawler with isolated in-memory storage, scoped cleanup, and a 30-second deadline. `ScrapeHttpClient` enforces public URLs, connection-time DNS checks, redirects, HTML content type, and a 5 MiB body limit. See README for the standalone example and self-hosting commands.
 - Client: `ChatClient` (Effect HttpClient over fetch, hand-rolled SSE decode) -> `sendMessageAtom` (`runtime.fn`, emits the full message list per token) -> `messagesAtom` / `isGeneratingAtom` / `chatFailureAtom` derived views. Stop = write `Atom.Interrupt`, Retry = write `Regenerate`, New chat = write `Atom.Reset`.
 - Theme: `themeAtom` (`Atom.kvs` over localStorage, JSON encoded) + `ThemeEffect` + a no-flash inline script in `__root.tsx`.
 - `src/routes/index.tsx` has `ssr: false`; the root shell still SSRs.
