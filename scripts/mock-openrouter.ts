@@ -17,6 +17,12 @@ Bun.serve({
     const auth = req.headers.get("authorization") ?? ""
     if (!auth.startsWith("Bearer ")) return Response.json({ error: { message: "Missing Authentication header", code: 401 } }, { status: 401 })
     const body = await req.json()
+    const latestUser = [...(body.messages ?? [])].reverse().find((message: { role: string }) => message.role === "user")
+    const scrapeUrl = typeof latestUser?.content === "string" && /scrape|read/i.test(latestUser.content)
+      ? latestUser.content.match(/https?:\/\/[^\s<>]+/)?.[0] : undefined
+    const toolResult = [...(body.messages ?? [])].reverse().find((message: { role: string }) => message.role === "tool")
+    const callTool = scrapeUrl && !toolResult && body.tool_choice !== "none" && body.tools?.some((tool: { function?: { name: string } }) => tool.function?.name === "scrapeUrl")
+    const tokens = toolResult ? [`Scrape result: ${toolResult.content}`] : reply
     console.log(`[mock] POST model=${body.model} stream=${body.stream} messages=${body.messages?.length}`)
     const id = "gen-" + Math.random().toString(36).slice(2)
     const chunk = (delta: Record<string, unknown>, finish: string | null) =>
@@ -27,7 +33,14 @@ Bun.serve({
       async start(controller) {
         const enc = new TextEncoder()
         controller.enqueue(enc.encode(chunk({ role: "assistant", content: "" }, null)))
-        for (const token of reply) {
+        if (callTool) {
+          controller.enqueue(enc.encode(chunk({ tool_calls: [{ index: 0, id: "scrape-1", type: "function", function: { name: "scrapeUrl", arguments: JSON.stringify({ url: scrapeUrl }) } }] }, null)))
+          controller.enqueue(enc.encode(chunk({}, "tool_calls")))
+          controller.enqueue(enc.encode("data: [DONE]\n\n"))
+          controller.close()
+          return
+        }
+        for (const token of tokens) {
           if (aborted) { console.log("[mock] stopped streaming early"); controller.close(); return }
           controller.enqueue(enc.encode(chunk({ content: token }, null)))
           await Bun.sleep(delayMs)
