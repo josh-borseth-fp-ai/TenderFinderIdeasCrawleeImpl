@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": ["vite/client", "bun"],
+    "paths": { "@/*": ["./src/*"] },
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": true,
+        "quickinfo": true,
+        "completions": true,
+        "goto": true,
+        "refactors": true,
+        "includeSuggestionsInTsc": true,
+        "ignoreEffectSuggestionsInTscExitCode": true
+      }
+    ]
+  },
+  "include": ["src", "scripts", "vite.config.ts", "vitest.config.ts", "server.ts"]
+}
