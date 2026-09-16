@@ -1,6 +1,6 @@
 # Bid Desk Chat
 
-Streaming chat scaffold: Bun + TypeScript 7 + TanStack Start (React 19) + Effect v4 + Effect Atom + shadcn/ui, OpenRouter as the model provider. No persistence. Designed to grow into a tool-heavy agent UI.
+Streaming chat and source onboarding: Bun + TypeScript 7 + TanStack Start (React 19) + Effect v4 + Effect Atom + shadcn/ui, OpenRouter as the model provider. Ordinary chat is ephemeral; sources, packages, approvals, and jobs persist in SQLite.
 
 ## Commands
 
@@ -30,6 +30,11 @@ Env: copy `.env.example` to `.env` (`OPENROUTER_API_KEY` required; `OPENROUTER_M
 - Local Effect source clone for reference: `~/.local/share/effect-solutions/effect` (run `git pull` there so it matches the pinned RC before relying on it).
 
 ## Architecture
+
+- Source onboarding: `/sources` uses the shared Effect HttpApi at `/api/source-data/*`, `/api/sources` for artifact downloads, and `/api/source-events` for replayable SSE. `src/atoms/sources.ts` uses AtomHttpApi for query/mutation state; source selection belongs to TanStack Router. `src/server/onboarding` uses Drizzle SQLite with migrations in `drizzle/`, Effect Queue/fibers for jobs, structured Effect AI decisions, and package validation. Use `bun run db:generate` after editing `db/schema.ts`. Browser disconnects do not cancel source jobs; explicit cancellation does.
+- `runner/` is a separate pinned Node/Crawlee/Playwright Docker runtime. Generated code is never imported by the app server. Network-disabled workers reach a public-address-filtered proxy through a Unix socket shared with a trusted gateway container. `runtime.json` pins each package to an image retained under a content-derived tag.
+- `runner/session.ts` gates browser actions by ownership using async-mutex. Dockerode owns container lifecycle; Bun.Archive and csv-stringify own downloads. Live screencasting and human takeover are stage 2; do not add Browserbase or expose CDP. See `docs/source-onboarding-plan.md`.
+- `bun run runner:build` builds Chromium and dependencies; `bun run runner:test` exercises real isolated crawlers on fixture websites. `bun run demo:sources` starts a separate, key-free fixture app after a production build. Production code never enables fixture networking.
 
 - `POST /api/chat` (`src/routes/api/chat.ts`) validates `ChatRequest`, runs `ChatService.stream`, and returns SSE via `src/server/Sse.ts`. Provider failures become a terminal `{"_tag":"Error"}` event, never a mid-stream 500. `GET /api/chat` returns `{ model }`.
 - `src/server/ChatService.ts#partToEvents` maps provider stream parts to wire events. `ScrapeToolkit` provides `scrapeUrl`; request-local history carries tool results into one final model call with tool execution disabled. Tool calls/results remain server-side; SSE still uses TextDelta/Error/Done.

@@ -10,11 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiSourceEventsRouteImport } from './routes/api/source-events'
+import { Route as ApiSourcesRouteImport } from './routes/api/sources'
+import { Route as ApiSourceDataSplatRouteImport } from './routes/api/source-data/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SourcesRoute = SourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -22,31 +31,81 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSourceEventsRoute = ApiSourceEventsRouteImport.update({
+  id: '/api/source-events',
+  path: '/api/source-events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSourcesRoute = ApiSourcesRouteImport.update({
+  id: '/api/sources',
+  path: '/api/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSourceDataSplatRoute = ApiSourceDataSplatRouteImport.update({
+  id: '/api/source-data/$',
+  path: '/api/source-data/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sources': typeof SourcesRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/source-events': typeof ApiSourceEventsRoute
+  '/api/sources': typeof ApiSourcesRoute
+  '/api/source-data/$': typeof ApiSourceDataSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sources': typeof SourcesRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/source-events': typeof ApiSourceEventsRoute
+  '/api/sources': typeof ApiSourcesRoute
+  '/api/source-data/$': typeof ApiSourceDataSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/sources': typeof SourcesRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/source-events': typeof ApiSourceEventsRoute
+  '/api/sources': typeof ApiSourcesRoute
+  '/api/source-data/$': typeof ApiSourceDataSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/chat'
+  fullPaths:
+    | '/'
+    | '/sources'
+    | '/api/chat'
+    | '/api/source-events'
+    | '/api/sources'
+    | '/api/source-data/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/chat'
-  id: '__root__' | '/' | '/api/chat'
+  to:
+    | '/'
+    | '/sources'
+    | '/api/chat'
+    | '/api/source-events'
+    | '/api/sources'
+    | '/api/source-data/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/sources'
+    | '/api/chat'
+    | '/api/source-events'
+    | '/api/sources'
+    | '/api/source-data/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SourcesRoute: typeof SourcesRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiSourceEventsRoute: typeof ApiSourceEventsRoute
+  ApiSourcesRoute: typeof ApiSourcesRoute
+  ApiSourceDataSplatRoute: typeof ApiSourceDataSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,6 +117,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sources': {
+      id: '/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -65,12 +131,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/source-events': {
+      id: '/api/source-events'
+      path: '/api/source-events'
+      fullPath: '/api/source-events'
+      preLoaderRoute: typeof ApiSourceEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sources': {
+      id: '/api/sources'
+      path: '/api/sources'
+      fullPath: '/api/sources'
+      preLoaderRoute: typeof ApiSourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/source-data/$': {
+      id: '/api/source-data/$'
+      path: '/api/source-data/$'
+      fullPath: '/api/source-data/$'
+      preLoaderRoute: typeof ApiSourceDataSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SourcesRoute: SourcesRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiSourceEventsRoute: ApiSourceEventsRoute,
+  ApiSourcesRoute: ApiSourcesRoute,
+  ApiSourceDataSplatRoute: ApiSourceDataSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

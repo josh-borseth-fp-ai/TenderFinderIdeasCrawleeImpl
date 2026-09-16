@@ -4,6 +4,7 @@ import { FetchHttpClient } from "effect/unstable/http"
 import { AppConfig } from "./AppConfig.ts"
 import { ChatService } from "./ChatService.ts"
 import { Scraper } from "./Scraper.ts"
+import { SourceModel } from "./onboarding/SourceModel.ts"
 
 const OpenRouterLive = Layer.unwrap(
   Effect.map(AppConfig, (config) =>
@@ -21,7 +22,7 @@ const OpenRouterLive = Layer.unwrap(
 ).pipe(Layer.provide(FetchHttpClient.layer))
 
 /** Everything the API routes need: ChatService plus AppConfig for the info endpoint. */
-export const appLayer = ChatService.layer.pipe(
+export const appLayer = Layer.mergeAll(ChatService.layer, SourceModel.layer).pipe(
   Layer.provide(Scraper.layer),
   Layer.provide(OpenRouterLive),
   Layer.provideMerge(AppConfig.layer),

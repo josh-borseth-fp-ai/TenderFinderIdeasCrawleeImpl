@@ -40,6 +40,7 @@ export function Header() {
         </div>
         <ModelBadge />
         <div className="ml-auto flex items-center gap-1">
+          <a href="/sources" className="mr-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground">Sources</a>
           <Tooltip>
             <TooltipTrigger
               render={
