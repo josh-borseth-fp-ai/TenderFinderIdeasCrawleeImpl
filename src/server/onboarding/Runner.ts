@@ -1,18 +1,18 @@
 import Docker from "dockerode"
-import { Effect, Schedule } from "effect"
+import { Effect, Schedule, Schema } from "effect"
 import { mkdtempSync, writeFileSync, symlinkSync, rmSync, chmodSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { PassThrough, type Duplex } from "node:stream"
 import { createInterface } from "node:readline"
-import type { Evidence } from "../../domain/Source.ts"
+import { RunnerResult, RunnerBatch, RuntimePin, PackageFiles } from "../../../runner/contract.ts"
+export { RunnerResult } from "../../../runner/contract.ts"
 
-export interface RunnerResult { records: unknown[]; evidence: Evidence[]; errors: string[]; visitedCount: number; coverage: string }
 export interface RunOptions { signal: AbortSignal; timeoutSeconds: number; inspect?: boolean; test?: boolean; fixture?: boolean; onProgress?: (partial: RunnerResult) => void }
 export interface PackageRunner {
   identity?(signal: AbortSignal): Promise<string>
-  run(files: Record<string, string>, domains: readonly string[], options: RunOptions): Promise<RunnerResult>
+  run(files: PackageFiles, domains: readonly string[], options: RunOptions): Promise<RunnerResult>
 }
 
 const hardened: Docker.HostConfig = { CapDrop: ["ALL"], SecurityOpt: ["no-new-privileges"], ReadonlyRootfs: true }
@@ -87,15 +87,14 @@ export class DockerRunner implements PackageRunner {
     }
   }
 
-  async run(files: Record<string, string>, domains: readonly string[], options: RunOptions): Promise<RunnerResult> {
+  async run(files: PackageFiles, domains: readonly string[], options: RunOptions): Promise<RunnerResult> {
     const signal = AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutSeconds * 1000)])
     const id = `bid-desk-${randomUUID()}`, gatewayName = `${id}-proxy`, volumeName = `${id}-socket`
     const directory = mkdtempSync(join(tmpdir(), "bid-desk-"))
-    const image: string = files["runtime.json"] ? (JSON.parse(files["runtime.json"]) as { image: string }).image : this.image
     let gateway: Docker.Container | undefined
     let volume: Docker.Volume | undefined
     try {
-      if (files["runtime.json"] && !/^sha256:[a-f0-9]{64}$/.test(image)) throw new Error("Invalid pinned runtime image")
+      const image = files["runtime.json"] ? Schema.decodeSync(Schema.fromJsonString(RuntimePin))(files["runtime.json"]).image : this.image
       for (const [name, content] of Object.entries(files)) {
         if (!/^[a-zA-Z0-9_.-]+$/.test(name)) throw new Error("Unsafe package filename")
         writeFileSync(join(directory, name), content, { mode: 0o644 })
@@ -142,15 +141,14 @@ export class DockerRunner implements PackageRunner {
       const partial: RunnerResult = { records: [], evidence: [], errors: [], visitedCount: 0, coverage: "Execution in progress; results are partial." }
       let decoded: RunnerResult | undefined
       const result = await this.execute({ ...base, Cmd: [...node, "/opt/runner/main.ts", ...(options.inspect ? ["--inspect"] : [])] }, signal, (line) => {
-        if (line.startsWith("BID_DESK_RESULT=")) { decoded = JSON.parse(line.slice("BID_DESK_RESULT=".length)) as RunnerResult; return }
+        if (line.startsWith("BID_DESK_RESULT=")) { decoded = Schema.decodeSync(Schema.fromJsonString(RunnerResult))(line.slice("BID_DESK_RESULT=".length)); return }
         if (!line.startsWith("BID_DESK_BATCH=")) return
-        const batch = JSON.parse(line.slice("BID_DESK_BATCH=".length)) as { records: unknown[]; visitedCount: number }
-        if (!Array.isArray(batch.records) || partial.records.length + batch.records.length > 10_000 || !Number.isSafeInteger(batch.visitedCount)) throw new Error("Invalid runner checkpoint")
+        const batch = Schema.decodeSync(Schema.fromJsonString(RunnerBatch))(line.slice("BID_DESK_BATCH=".length))
+        if (partial.records.length + batch.records.length > 10_000) throw new Error("Invalid runner checkpoint")
         partial.records.push(...batch.records); partial.visitedCount = batch.visitedCount
         options.onProgress?.(partial)
       })
       if (!decoded) throw new Error(`Runner failed (${result.code}): ${result.output.slice(-6000)}`)
-      if (!Array.isArray(decoded.records) || !Array.isArray(decoded.evidence) || !Array.isArray(decoded.errors) || !Number.isSafeInteger(decoded.visitedCount) || decoded.visitedCount < 0 || typeof decoded.coverage !== "string") throw new Error("Invalid runner response")
       if (result.code !== 0 && decoded.errors.length === 0) decoded.errors.push(`Runner exited with code ${result.code}`)
       return decoded
     } catch (error) {

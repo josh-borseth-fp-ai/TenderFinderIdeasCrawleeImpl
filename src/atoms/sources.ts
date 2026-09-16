@@ -23,7 +23,7 @@ export const sourceEventsAtom = Atom.family((id: string) => SourceClient.runtime
     Effect.sync(() => {
       const events = new EventSource(`/api/source-events?sourceId=${encodeURIComponent(id)}`)
       events.onmessage = (message) => {
-        try { Queue.offerUnsafe(queue, Schema.decodeUnknownSync(ProgressEvent)(JSON.parse(message.data))) }
+        try { Queue.offerUnsafe(queue, Schema.decodeSync(Schema.fromJsonString(ProgressEvent))(message.data)) }
         catch { Effect.runSync(Queue.fail(queue, new SourceError({ message: "Invalid source progress event" }))) }
       }
       return events

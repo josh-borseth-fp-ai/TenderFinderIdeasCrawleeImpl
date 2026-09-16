@@ -1,3 +1,4 @@
+import { Schema } from "effect"
 import http from "node:http"
 import net from "node:net"
 import { lookup } from "node:dns/promises"
@@ -70,7 +71,7 @@ export function startProxy(domains: string[], socketPath: string, fixturePort?: 
 }
 
 if (process.argv[1]?.endsWith("proxy.ts")) {
-  const domains: string[] = JSON.parse(process.argv[2] ?? "[]")
+  const domains = Schema.decodeSync(Schema.fromJsonString(Schema.mutable(Schema.Array(Schema.String))))(process.argv[2] ?? "[]")
   // Only the integration-test CLI supplies this argument, never the application.
   const fixture = process.argv.includes("--fixture") ? await import("./fixtures.ts").then((module) => module.startFixtures()) : undefined
   startProxy(domains, "/proxy/egress.sock", fixture)

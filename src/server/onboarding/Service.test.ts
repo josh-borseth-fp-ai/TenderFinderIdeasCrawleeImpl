@@ -83,7 +83,7 @@ describe("source lifecycle", () => {
     const { service, store, source } = setup()
     await service.command({ action: "generate", sourceId: source.id }); await service.idle()
     const version = service.detail(source.id).versions[0]!
-    const files = service.files(version); files["scraper.ts"] = "tampered"
+    const files = { ...service.files(version), "scraper.ts": "tampered" }
     store.writeArtifact(version.id, "package.json", JSON.stringify(files))
     await expect(service.command({ action: "approve", sourceId: source.id, versionId: version.id, revision: 1, digest: version.digest })).rejects.toThrow("integrity")
   })

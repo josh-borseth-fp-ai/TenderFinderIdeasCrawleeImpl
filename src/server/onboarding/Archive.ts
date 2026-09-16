@@ -2,7 +2,7 @@ import { stringify } from "csv-stringify/sync"
 
 export const packageArchive = (files: Record<string, string>) => new Bun.Archive(files).bytes()
 
-export const recordsCsv = (records: Record<string, unknown>[]) => stringify(records, {
+export const recordsCsv = (records: readonly Record<string, unknown>[]) => stringify([...records], {
   columns: [...new Set(records.flatMap(Object.keys))],
   header: true,
   quoted: true,

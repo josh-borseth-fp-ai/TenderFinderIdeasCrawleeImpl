@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { Deferred, Effect, Fiber, Queue, Schema } from "effect"
-import { AgentDecision, SourceError, type Evidence, type Job, type PackageDraft, type ScraperVersion, type SourceCommand, type SourceDetail } from "../../domain/Source.ts"
+import { AgentDecision, SourceError, Evidence, type Job, type PackageDraft, type ScraperVersion, type SourceCommand, type SourceDetail } from "../../domain/Source.ts"
 import { SourceStore, digestFiles } from "./Store.ts"
 import { permittedUrl, validateBrief, validateRecords } from "./Records.ts"
+import { Manifest, PackageFiles } from "../../../runner/contract.ts"
 import { manifest, packageFiles, runtimeFile } from "./Packages.ts"
 import type { PackageRunner } from "./Runner.ts"
 
@@ -79,8 +80,8 @@ export class OnboardingService {
     if (version.sourceId !== sourceId) throw new Error("Version does not belong to this source")
     return version
   }
-  files(version: ScraperVersion): Record<string, string> {
-    const files = JSON.parse(this.store.readArtifact(version.id, "package.json")) as Record<string, string>
+  files(version: ScraperVersion): PackageFiles {
+    const files = Schema.decodeSync(Schema.fromJsonString(PackageFiles))(this.store.readArtifact(version.id, "package.json"))
     if (digestFiles(files) !== version.digest) throw new Error("Package integrity check failed")
     return files
   }
@@ -131,7 +132,7 @@ export class OnboardingService {
     // itself sufficient to approve a version.
     for (const previous of this.detail(source.id).jobs.filter((item) => item.id !== job.id && item.kind === "generate").slice(0, 3)) {
       try {
-        const saved = JSON.parse(this.store.readArtifact(previous.id, "evidence.json")) as Evidence[]
+        const saved = Schema.decodeSync(Schema.fromJsonString(Schema.Array(Evidence)))(this.store.readArtifact(previous.id, "evidence.json"))
         for (const page of saved) {
           try { permittedUrl(page.finalUrl, source.brief) } catch { continue }
           if (!evidence.some((item) => item.finalUrl === page.finalUrl && item.strategy === page.strategy)) evidence.push(page)
@@ -188,8 +189,10 @@ export class OnboardingService {
       if (!evidence.length) { feedback = "Inspect at least one real page before generating a package."; continue }
       let version: ScraperVersion | undefined
       try {
-        const files = packageFiles(source, decision.package, evidence)
-        if (this.runner.identity) files["runtime.json"] = JSON.stringify({ image: await this.runner.identity(signal), contractVersion: 1 })
+        const files = {
+          ...packageFiles(source, decision.package, evidence),
+          ...(this.runner.identity ? { "runtime.json": JSON.stringify({ image: await this.runner.identity(signal), contractVersion: 1 }) } : {}),
+        }
         version = { id: randomUUID(), sourceId: source.id, revision: source.revision, digest: digestFiles(files), brief: source.brief, draft: decision.package, createdAt: now(), report: null, samples: [], approvedAt: null }
         this.store.writeArtifact(version.id, "package.json", JSON.stringify(files))
         this.store.saveVersion(version)
@@ -209,8 +212,8 @@ export class OnboardingService {
   }
   private async validate(job: Job, version: ScraperVersion, signal: AbortSignal, manual: boolean) {
     const files = this.files(version)
-    const currentManifest = JSON.parse(files["manifest.json"]!) as ReturnType<typeof manifest>
-    if (manual) currentManifest.limits = { maxPages: 1000, maxRecords: 10_000, timeoutSeconds: 1800 }
+    const savedManifest = Schema.decodeSync(Schema.fromJsonString(Manifest))(files["manifest.json"] ?? "null")
+    const currentManifest: Manifest = manual ? { ...savedManifest, limits: { maxPages: 1000, maxRecords: 10_000, timeoutSeconds: 1800 } } : savedManifest
     const runFiles = { ...files, "manifest.json": JSON.stringify(currentManifest) }
     if (!manual) this.store.saveVersion({ ...version, report: null, samples: [] })
     this.store.saveJob({ ...this.store.job(job.id), report: null })

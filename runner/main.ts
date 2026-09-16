@@ -1,3 +1,4 @@
+import { Schema } from "effect"
 import { Mutex, Semaphore } from "async-mutex"
 import { createServer, connect } from "node:net"
 import { readFileSync } from "node:fs"
@@ -7,11 +8,11 @@ import { RobotsTxtFile } from "@crawlee/utils"
 import { load } from "cheerio"
 import { chromium } from "playwright"
 import { BrowserSession } from "./session.ts"
-import type { BrowserActions, Manifest, PageInput, RequestSpec, ScraperModule } from "./contract.ts"
+import { Manifest, PageInput, RequestSpec, BidDraft, RunnerResult, type BrowserActions, type ScraperModule, type Strategy } from "./contract.ts"
 
-const manifest: Manifest = JSON.parse(readFileSync("/work/manifest.json", "utf8"))
+const manifest = Schema.decodeSync(Schema.fromJsonString(Manifest))(readFileSync("/work/manifest.json", "utf8"))
 const inspect = process.argv.includes("--inspect")
-const output: { records: unknown[]; evidence: unknown[]; errors: string[]; visitedCount: number; coverage: string } = {
+const output: RunnerResult = {
   records: [], evidence: [], errors: [], visitedCount: 0, coverage: "All discovered in-scope requests processed.",
 }
 // The container has --network none. This loopback proxy is its only network path;
@@ -76,18 +77,17 @@ const enqueue = (spec: RequestSpec) => admission.runExclusive(async () => {
     else admitted++
   } catch (error) { outstanding--; throw error }
 })
-async function consume(input: PageInput, strategy: string) {
+async function consume(input: PageInput, strategy: Strategy) {
   if (!allowed(input.url)) throw new Error("Redirected to an excluded URL")
   output.visitedCount++
   if (inspect) {
     const $ = load(input.html ?? "")
     const links = $("a[href]").map((_i, element) => { try { return new URL($(element).attr("href")!, input.url).href } catch { return "" } }).get().filter(Boolean).slice(0, 200)
     $("script,style,noscript,svg").remove()
-    output.evidence.push({ ...input, url: manifest.seedUrls[0], finalUrl: input.url, strategy, dom: $.html().slice(0, 60_000), text: $.text().replace(/\s+/g, " ").trim().slice(0, 20_000), links })
+    output.evidence.push({ ...input, url: manifest.seedUrls[0] ?? input.url, finalUrl: input.url, strategy, dom: $.html().slice(0, 60_000), text: $.text().replace(/\s+/g, " ").trim().slice(0, 20_000), links })
     return
   }
-  const records = await module!.extract(input)
-  if (!Array.isArray(records)) throw new Error("extract must return an array")
+  const records = Schema.decodeUnknownSync(Schema.Array(BidDraft))(await module!.extract(input))
   const $ = load(input.html ?? "")
   $("script,style,noscript").remove()
   const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase()
@@ -101,8 +101,7 @@ async function consume(input: PageInput, strategy: string) {
   output.records.push(...batch)
   console.log(`BID_DESK_BATCH=${JSON.stringify({ records: batch, visitedCount: output.visitedCount })}`)
   if (output.records.length >= manifest.limits.maxRecords) { output.coverage = `Bounded at ${manifest.limits.maxRecords} extracted records.`; stop(); return }
-  const discovered = await module!.discover(input)
-  if (!Array.isArray(discovered) || discovered.length > 10_000) throw new Error("discover must return at most 10,000 request specs")
+  const discovered = Schema.decodeUnknownSync(Schema.Array(RequestSpec).check(Schema.isMaxLength(10_000)))(await module!.discover(input))
   for (const request of discovered) await enqueue({ ...request, url: new URL(request.url, input.url).href })
 }
 for (const strategy of new Set(manifest.routes.map((route) => route.strategy))) {
@@ -146,7 +145,7 @@ for (const strategy of new Set(manifest.routes.map((route) => route.strategy))) 
               waitFor: (selector) => session.agent(() => page.locator(selector).first().waitFor({ timeout: 15_000 })),
               snapshot,
             }
-            for (const extra of (await module.browse(actions, input)).slice(0, manifest.limits.maxPages - output.visitedCount)) { if (stopped) break; await consume(extra, strategy) }
+            for (const extra of Schema.decodeUnknownSync(Schema.Array(PageInput))(await module.browse(actions, input)).slice(0, manifest.limits.maxPages - output.visitedCount)) { if (stopped) break; await consume(extra, strategy) }
           }
         } finally { session.close(); sessions.delete(session) }
         complete(request)
@@ -161,7 +160,7 @@ for (const strategy of new Set(manifest.routes.map((route) => route.strategy))) 
         if ((response.statusCode ?? 200) >= 400) throw new Error(`HTTP ${response.statusCode}`)
         const text = typeof body === "string" ? body : body.toString("utf8")
         if (Buffer.byteLength(text) > 5 * 1024 * 1024) throw new Error("Response exceeds 5 MiB")
-        const json = contentType.type.includes("json") ? JSON.parse(text) : null
+        const json = contentType.type.includes("json") ? Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(text) : null
         await consume({ url: request.loadedUrl ?? request.url, label: String(request.userData.label), html: json === null ? text : null, json }, strategy)
         complete(request)
       },

@@ -1,20 +1,23 @@
 import { execFileSync } from "node:child_process"
+import { Schema } from "effect"
+import { BidDraft, type Manifest, type Strategy } from "../runner/contract.ts"
 import assert from "node:assert/strict"
 import { DockerRunner } from "../src/server/onboarding/Runner.ts"
 import { runtimeFile } from "../src/server/onboarding/Packages.ts"
 
 const runner = new DockerRunner(), signal = new AbortController().signal
 const runtime = { image: await runner.identity(signal), contractVersion: 1 }
-const manifest = (strategy: string, url: string, mixed = false) => ({
+const manifest = (strategy: Strategy, url: string, mixed = false): Manifest => ({
   formatVersion: 1, sourceId: "fixture-source", revision: 1, entrypoint: "scraper.ts", seedUrls: [url], allowedDomains: ["fixture.test"],
   includePatterns: [], excludePatterns: ["/excluded"],
   routes: [{ label: "index", strategy, waitFor: strategy === "playwright" ? "main a" : null }, { label: "detail", strategy: mixed ? "cheerio" : strategy, waitFor: null }],
   limits: { maxPages: 10, maxRecords: 20, timeoutSeconds: 90 },
 })
 const code = `import { load } from 'cheerio';
-import type { PageInput, BidDraft, RequestSpec } from './contract.ts';
+import { Schema } from 'effect';
+import { BidDraft, type PageInput, type RequestSpec } from './contract.ts';
 export function extract(input: PageInput): BidDraft[] {
-  if (input.json) return (input.json as { bids: BidDraft[] }).bids;
+  if (input.json) return Schema.decodeUnknownSync(Schema.Struct({ bids: Schema.mutable(Schema.Array(BidDraft)) }))(input.json).bids;
   const $ = load(input.html || '');
   return $('h1').length ? [{ title: $('h1').text(), sourceUrl: input.url, buyer: $('[data-buyer]').text(), status: 'open', evidence: $('main').text() }] : [];
 }
@@ -28,7 +31,7 @@ for (const [strategy, path, mixed] of [["cheerio", "/", false], ["http", "/json"
   console.log(`Checking ${strategy}${mixed ? " → Cheerio" : ""}`)
   const result = await runner.run({ ...baseFiles, "manifest.json": JSON.stringify(manifest(strategy, `http://fixture.test${path}`, mixed)) }, ["fixture.test"], { signal, timeoutSeconds: 120, fixture: true })
   assert.deepEqual(result.errors, [], JSON.stringify(result))
-  assert.equal((result.records[0] as { title: string })?.title, "Bridge repair", JSON.stringify(result))
+  assert.equal(Schema.decodeUnknownSync(BidDraft)(result.records[0]).title, "Bridge repair", JSON.stringify(result))
   assert.ok(result.visitedCount > 0)
 }
 console.log("Checking investigation snapshots")
@@ -40,6 +43,11 @@ console.log("Checking empty and skipped fixture rejection")
 for (const tests of ["", "import { test } from 'node:test'; test.skip('never runs', () => {})"]) {
   await assert.rejects(runner.run({ ...baseFiles, "scraper.test.ts": tests }, [], { signal, timeoutSeconds: 90, test: true }), /no tests executed/)
 }
+console.log("Checking malformed worker checkpoint rejection")
+await assert.rejects(runner.run({
+  ...baseFiles, "manifest.json": JSON.stringify(manifest("cheerio", "http://fixture.test/detail")),
+  "scraper.ts": `console.log('BID_DESK_BATCH={"records":[],"visitedCount":-1}'); export const extract = () => []; export const discover = () => [];`,
+}, ["fixture.test"], { signal, timeoutSeconds: 90, fixture: true }), /visitedCount/)
 console.log("Checking redirects to private destinations")
 const blocked = await runner.run({ ...baseFiles, "manifest.json": JSON.stringify(manifest("http", "http://fixture.test/private-redirect")) }, ["fixture.test"], { signal, timeoutSeconds: 90, fixture: true })
 assert.ok(blocked.errors.length > 0)

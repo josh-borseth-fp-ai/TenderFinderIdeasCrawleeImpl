@@ -11,6 +11,17 @@ afterEach(() => { for (const path of directories.splice(0)) rmSync(path, { recur
 const directory = () => { const path = mkdtempSync(join(tmpdir(), "source-migration-")); directories.push(path); return path }
 
 describe("onboarding database migration", () => {
+  it("rejects malformed persisted payloads when reading a source", () => {
+    const path = directory(), store = new SourceStore(path)
+    const source = store.create(emptyBrief("Source", "https://example.com"))
+    const connection = new DatabaseSync(join(path, "sources.sqlite"))
+    connection.prepare("UPDATE sources SET payload = ? WHERE id = ?").run(JSON.stringify({ ...source, revision: "invalid" }), source.id)
+    connection.close()
+    try {
+      expect(() => store.source(source.id)).toThrow()
+      expect(() => store.list()).toThrow()
+    } finally { store.close() }
+  })
   it("adopts the original JSON tables and reopens without losing saved sources", () => {
     const path = directory()
     const source: Source = { id: "saved-source", brief: emptyBrief("Existing source", "https://example.com"), revision: 7, approvedVersionId: null, createdAt: "then", updatedAt: "now" }

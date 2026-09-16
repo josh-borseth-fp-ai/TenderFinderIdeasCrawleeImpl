@@ -6,7 +6,7 @@ import { useState } from "react"
 import { ArrowLeftIcon, CheckCircle2Icon, FileCodeIcon, GlobeIcon, LoaderCircleIcon, PlusIcon, SendIcon, ShieldCheckIcon, SquareIcon } from "lucide-react"
 import { Streamdown } from "streamdown"
 import type { Job, ScraperVersion, SourceBrief, SourceCommand, ValidationReport } from "@/domain/Source"
-import { emptyBrief } from "@/domain/Source"
+import { emptyBrief, sourceReviewTabs, decodeSourceReviewTab, type SourceReviewTab } from "@/domain/Source"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ThemeEffect } from "@/components/theme/ThemeEffect"
@@ -14,7 +14,6 @@ import { ModeToggle } from "@/components/theme/ModeToggle"
 
 const inputClass = "w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
 const active = (job: Job) => job.state === "queued" || job.state === "running"
-type Tab = "Scope" | "Samples" | "Validation" | "Runbook" | "Files" | "Runs"
 
 export function SourceWorkspace() {
   const navigate = useNavigate()
@@ -29,7 +28,7 @@ export function SourceWorkspace() {
   const [creating, setCreating] = useState(false)
   const [actionError, setError] = useState("")
   const [prompt, setPrompt] = useState("")
-  const [tab, setTab] = useState<Tab>("Scope")
+  const [tab, setTab] = useState<SourceReviewTab>("Scope")
   const [versionId, setVersionId] = useState<string | null>(null)
   const [file, setFile] = useState("scraper.ts")
   const version = detail?.versions.find((version) => version.id === versionId) ?? detail?.versions[0]
@@ -103,12 +102,12 @@ export function SourceWorkspace() {
               </div>
             </form>
           </section>
-          <Tabs.Root value={tab} onValueChange={(value) => setTab(value as Tab)} className="min-w-0 bg-muted/10" aria-label="Source review">
+          <Tabs.Root value={tab} onValueChange={(value) => setTab(decodeSourceReviewTab(value))} className="min-w-0 bg-muted/10" aria-label="Source review">
             <div className="flex flex-wrap items-center gap-3 border-b px-5 py-4">
               <span className="text-sm font-medium">Review workspace</span>
               {version && <select aria-label="Scraper version" className="ml-auto max-w-56 rounded-md border bg-background p-1.5 text-xs" value={version.id} onChange={(event) => setVersionId(event.target.value)}>{detail.versions.map((candidate, index) => <option key={candidate.id} value={candidate.id}>Version {detail.versions.length - index} · {candidate.approvedAt ? "approved" : candidate.report?.passed ? "validated" : "candidate"}</option>)}</select>}
             </div>
-            <Tabs.List className="flex overflow-x-auto border-b px-3" aria-label="Review sections">{(["Scope", "Samples", "Validation", "Runbook", "Files", "Runs"] as Tab[]).map((name) => <Tabs.Tab key={name} value={name} className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium ${tab === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{name}</Tabs.Tab>)}</Tabs.List>
+            <Tabs.List className="flex overflow-x-auto border-b px-3" aria-label="Review sections">{sourceReviewTabs.map((name) => <Tabs.Tab key={name} value={name} className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium ${tab === name ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{name}</Tabs.Tab>)}</Tabs.List>
             <Tabs.Panel key={tab} value={tab} className="p-5" aria-label={tab}>
               {tab === "Scope" && <BriefForm key={`${detail.source.id}-${detail.source.revision}`} brief={detail.source.brief} disabled={busy || !!running} submitLabel="Save scope" onSave={(brief) => execute({ action: "update", sourceId: detail.source.id, revision: detail.source.revision, brief })} />}
               {tab !== "Scope" && tab !== "Runs" && !version && <p className="py-12 text-center text-sm text-muted-foreground">Generate a scraper to review its sample records, tests, and runbook.</p>}

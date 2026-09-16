@@ -1,5 +1,6 @@
 import { Sse } from "effect/unstable/encoding"
-import { Effect, Stream } from "effect"
+import { BidRecord } from "../../domain/Source.ts"
+import { Effect, Schema, Stream } from "effect"
 import { onboarding } from "./Runtime.ts"
 import { packageArchive, recordsCsv } from "./Archive.ts"
 
@@ -30,7 +31,7 @@ export async function sourceApi(request: Request): Promise<Response> {
     if (jobId) {
       service.store.job(jobId)
       const json = service.store.readArtifact(jobId, "results.json")
-      if (kind === "csv") return new Response(recordsCsv(JSON.parse(json)), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="results-${jobId}.csv"` } })
+      if (kind === "csv") return new Response(recordsCsv(Schema.decodeSync(Schema.fromJsonString(Schema.Array(BidRecord)))(json)), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="results-${jobId}.csv"` } })
       return new Response(json, { headers: { "content-type": "application/json", "content-disposition": `attachment; filename="results-${jobId}.json"` } })
     }
     return Response.json({ error: "Artifact not found" }, { status: 404 })

@@ -1,6 +1,7 @@
 import { Mutex, Semaphore } from "async-mutex"
 
-export type ControlState = "agent-controlled" | "awaiting-human" | "human-controlled" | "closed"
+import type { ControlState } from "./contract.ts"
+export { ControlState } from "./contract.ts"
 
 /** Product ownership rules; async-mutex owns input serialization and wakeups. */
 export class BrowserSession {

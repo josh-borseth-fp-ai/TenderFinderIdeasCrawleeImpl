@@ -1,12 +1,12 @@
 import { Schema } from "effect"
+import { Strategy, BidStatus, RouteSpec } from "../../runner/contract.ts"
+export { Strategy, RouteSpec, Evidence } from "../../runner/contract.ts"
 
 const NullableText = Schema.NullOr(Schema.String)
-export const Strategy = Schema.Literals(["http", "cheerio", "playwright"])
-export type Strategy = typeof Strategy.Type
 export const BidRecord = Schema.Struct({
   id: Schema.String, sourceId: Schema.String, sourceUrl: Schema.String, extractedAt: Schema.String,
   title: Schema.String, buyer: NullableText, solicitationId: NullableText, description: NullableText,
-  status: Schema.Literals(["open", "closed", "awarded", "cancelled", "unknown"]),
+  status: BidStatus,
   postedDate: NullableText, deadline: NullableText, deadlineRaw: NullableText,
   location: NullableText, categories: Schema.Array(Schema.String), attachmentLinks: Schema.Array(Schema.String),
   budget: Schema.NullOr(Schema.Finite), currency: NullableText, budgetRaw: NullableText,
@@ -25,7 +25,6 @@ export const SourceBrief = Schema.Struct({
   openOnly: Schema.Boolean,
 })
 export type SourceBrief = typeof SourceBrief.Type
-export const RouteSpec = Schema.Struct({ label: Schema.String, strategy: Strategy, waitFor: Schema.NullOr(Schema.String) })
 export const PackageDraft = Schema.Struct({
   rationale: Schema.String,
   runbook: Schema.String,
@@ -45,8 +44,6 @@ export const SourceMessage = Schema.Struct({ id: Schema.String, role: Schema.Lit
 export type SourceMessage = typeof SourceMessage.Type
 export const Source = Schema.Struct({ id: Schema.String, brief: SourceBrief, revision: Schema.Int, approvedVersionId: NullableText, createdAt: Schema.String, updatedAt: Schema.String })
 export type Source = typeof Source.Type
-export const Evidence = Schema.Struct({ url: Schema.String, finalUrl: Schema.String, strategy: Strategy, label: Schema.String, html: NullableText, dom: Schema.optional(Schema.String), json: Schema.Unknown, text: Schema.String, links: Schema.mutable(Schema.Array(Schema.String)) })
-export type Evidence = typeof Evidence.Type
 export const ValidationReport = Schema.Struct({
   passed: Schema.Boolean, testsPassed: Schema.Boolean, errors: Schema.mutable(Schema.Array(Schema.String)), warnings: Schema.mutable(Schema.Array(Schema.String)),
   recordCount: Schema.Int, excludedCount: Schema.Int, duplicateCount: Schema.Int, visitedCount: Schema.Int,
@@ -70,6 +67,11 @@ export const ProgressEvent = Schema.Struct({ id: Schema.Int, jobId: Schema.Strin
 export type ProgressEvent = typeof ProgressEvent.Type
 export const SourceDetail = Schema.Struct({ source: Source, messages: Schema.mutable(Schema.Array(SourceMessage)), versions: Schema.mutable(Schema.Array(ScraperVersion)), jobs: Schema.mutable(Schema.Array(Job)) })
 export type SourceDetail = typeof SourceDetail.Type
+
+export const SourceReviewTab = Schema.Literals(["Scope", "Samples", "Validation", "Runbook", "Files", "Runs"])
+export type SourceReviewTab = typeof SourceReviewTab.Type
+export const sourceReviewTabs = SourceReviewTab.literals
+export const decodeSourceReviewTab = Schema.decodeUnknownSync(SourceReviewTab)
 
 export const SourceCommand = Schema.Union([
   Schema.Struct({ action: Schema.Literal("create"), brief: SourceBrief }),

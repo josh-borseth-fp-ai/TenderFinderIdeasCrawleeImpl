@@ -2,7 +2,8 @@ import { createRequire } from "node:module"
 import { mkdirSync, readFileSync, writeFileSync, renameSync, lstatSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { createHash, randomUUID } from "node:crypto"
-import type { BidRecord, Evidence, Job, ProgressEvent, ScraperVersion, Source, SourceBrief, SourceDetail, SourceMessage } from "../../domain/Source.ts"
+import { Schema } from "effect"
+import { Job, ScraperVersion, Source, SourceMessage, type BidRecord, type Evidence, type ProgressEvent, type SourceBrief, type SourceDetail } from "../../domain/Source.ts"
 
 import { and, desc, eq, gt, sql } from "drizzle-orm"
 import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core"
@@ -41,11 +42,11 @@ export class SourceStore {
     this.db.transaction(() => { result = fn() }, { behavior: "immediate" })
     return result
   }
-  list() { return this.db.select().from(tables.sources).orderBy(desc(sql`rowid`)).all().map((row) => row.payload) }
-  source(id: string) { return required(this.db.select().from(tables.sources).where(eq(tables.sources.id, id)).get(), "Source").payload }
-  version(id: string) { return required(this.db.select().from(tables.versions).where(eq(tables.versions.id, id)).get(), "Version").payload }
-  job(id: string) { return required(this.db.select().from(tables.jobs).where(eq(tables.jobs.id, id)).get(), "Job").payload }
-  jobs() { return this.db.select().from(tables.jobs).orderBy(desc(sql`rowid`)).all().map((row) => row.payload) }
+  list() { return this.db.select().from(tables.sources).orderBy(desc(sql`rowid`)).all().map((row) => Schema.decodeSync(Source)(row.payload)) }
+  source(id: string) { return Schema.decodeSync(Source)(required(this.db.select().from(tables.sources).where(eq(tables.sources.id, id)).get(), "Source").payload) }
+  version(id: string) { return Schema.decodeSync(ScraperVersion)(required(this.db.select().from(tables.versions).where(eq(tables.versions.id, id)).get(), "Version").payload) }
+  job(id: string) { return Schema.decodeSync(Job)(required(this.db.select().from(tables.jobs).where(eq(tables.jobs.id, id)).get(), "Job").payload) }
+  jobs() { return this.db.select().from(tables.jobs).orderBy(desc(sql`rowid`)).all().map((row) => Schema.decodeSync(Job)(row.payload)) }
   saveSource(source: Source) {
     this.db.insert(tables.sources).values({ id: source.id, payload: source }).onConflictDoUpdate({ target: tables.sources.id, set: { payload: source } }).run()
   }
@@ -77,9 +78,9 @@ export class SourceStore {
   detail(id: string): SourceDetail {
     return {
       source: this.source(id),
-      messages: this.db.select().from(tables.messages).where(eq(tables.messages.sourceId, id)).orderBy(sql`rowid`).all().map((row) => row.payload),
-      versions: this.db.select().from(tables.versions).where(eq(tables.versions.sourceId, id)).orderBy(desc(sql`rowid`)).all().map((row) => row.payload),
-      jobs: this.db.select().from(tables.jobs).where(eq(tables.jobs.sourceId, id)).orderBy(desc(sql`rowid`)).all().map((row) => row.payload),
+      messages: this.db.select().from(tables.messages).where(eq(tables.messages.sourceId, id)).orderBy(sql`rowid`).all().map((row) => Schema.decodeSync(SourceMessage)(row.payload)),
+      versions: this.db.select().from(tables.versions).where(eq(tables.versions.sourceId, id)).orderBy(desc(sql`rowid`)).all().map((row) => Schema.decodeSync(ScraperVersion)(row.payload)),
+      jobs: this.db.select().from(tables.jobs).where(eq(tables.jobs.sourceId, id)).orderBy(desc(sql`rowid`)).all().map((row) => Schema.decodeSync(Job)(row.payload)),
     }
   }
   event(job: Job, message: string) {

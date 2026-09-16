@@ -1,14 +1,10 @@
 import { Effect, Option, Stream } from "effect"
 import { Atom, AsyncResult } from "effect/unstable/reactivity"
-import type { ChatMessage } from "@/domain/Chat"
+import type { UiMessage, MessageStatus, ChatFailure } from "@/domain/Chat"
 import { ChatClient, ChatClientError } from "./ChatClient.ts"
 import { runtime } from "./runtime.ts"
 
-export type MessageStatus = "streaming" | "interrupted" | "error"
-
-export interface UiMessage extends ChatMessage {
-  readonly status?: MessageStatus | undefined
-}
+export type { UiMessage, MessageStatus } from "@/domain/Chat"
 
 /** Write this to sendMessageAtom to regenerate the last assistant answer. */
 export const Regenerate: unique symbol = Symbol.for("@app/chat/Regenerate")
@@ -100,7 +96,7 @@ export const messagesAtom = Atom.readable((get): ReadonlyArray<UiMessage> => {
 export const isGeneratingAtom = Atom.map(sendMessageAtom, AsyncResult.isWaiting)
 
 /** Failure detail for the status bar. None while idle/generating/success. */
-export const chatFailureAtom = Atom.readable((get): Option.Option<{ readonly kind: "interrupted" | "error"; readonly message: string }> => {
+export const chatFailureAtom = Atom.readable((get): Option.Option<ChatFailure> => {
   const result = get(sendMessageAtom)
   if (!AsyncResult.isFailure(result)) return Option.none()
   if (AsyncResult.isInterrupted(result)) return Option.some({ kind: "interrupted", message: "Generation stopped." })

@@ -19,7 +19,8 @@ Env: copy `.env.example` to `.env` (`OPENROUTER_API_KEY` required; `OPENROUTER_M
 
 ## Effect conventions (effect.solutions, Effect v4)
 
-- **All Effect packages pinned to the same RC build** (`4.0.0-rc.113`). Bump them together. RCs drift; keep Effect imports inside `src/server`, `src/atoms`, `src/domain`.
+- **All Effect packages pinned to the same RC build** (`4.0.0-rc.113`), including the standalone runner. Bump them together. RCs drift; keep app Effect imports inside `src/server`, `src/atoms`, `src/domain`; the standalone runner and CLI may also use Effect for boundary validation.
+- Follow `AGENTS.md`: model data with Effect Schema, derive TypeScript types, and decode untrusted boundary data. Shared runner/package schemas live in `runner/contract.ts`; ordinary interfaces are reserved for behavioral ports and other documented exceptions.
 - Services: `class X extends Context.Service<X, Shape>()("@app/X")` with a `static readonly layer`. Capture dependencies at layer build time so service methods have `R = never` (see `ChatService`).
 - Errors: `class E extends Schema.TaggedError<E>()("E", { ... }) {}`. Map provider errors at the boundary (`Stream.mapError`) rather than leaking `AiError`.
 - Domain schemas live in `src/domain/Chat.ts`; use `Schema.Literals`, `Schema.TaggedStruct`, `Schema.Union([...])`, `Schema.fromJsonString` for wire codecs.
