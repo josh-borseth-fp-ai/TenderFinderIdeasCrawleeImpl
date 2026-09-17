@@ -49,7 +49,7 @@ reopen saved results. Test static, JSON, browser, and mixed strategies.
 
 Use the installed Effect stack for jobs, lifecycle cleanup, structured model output,
 typed APIs, SSE and reactive UI state. Use Drizzle ORM/Kit for SQLite and migrations,
-Dockerode for containers, async-mutex for browser input and crawl permits,
+Dockerode for containers, Effect Semaphore/Latch/Deferred for browser ownership and crawl permits,
 Bun.Archive for tar downloads, csv-stringify for exports, and Apify's proxy-chain
 for HTTP forwarding and CONNECT tunnels. Keep destination policy separate from
 transport; use library traffic counters and Node pipeline for the Unix relay. Crawlee RequestQueue

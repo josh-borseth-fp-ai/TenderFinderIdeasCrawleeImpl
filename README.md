@@ -109,8 +109,11 @@ own authenticated reverse proxy for remote access.
   Base UI Tabs supplies review-panel keyboard navigation and accessibility.
 - Drizzle ORM/Kit owns database queries, transactions, JSON columns, and migrations.
 - Dockerode owns container/image/volume operations and stream demultiplexing.
-- Crawlee RequestQueue owns request deduplication; async-mutex owns browser input
-  serialization and shared per-host concurrency permits.
+- Crawlee RequestQueue owns request deduplication; Effect Semaphore owns browser input
+  serialization, request admission, and shared per-host concurrency permits.
+  Effect Latch and Deferred coordinate browser pause/resume and session closure.
+  Shared admission and host limits span all strategy instances; Crawlee's own
+  concurrency and rate limits remain responsible for each individual crawler.
 - Bun.Archive creates package downloads; csv-stringify produces CSV with formula
   escaping. Node's test runner supplies structured fixture-test outcomes.
 

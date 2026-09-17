@@ -34,6 +34,30 @@ for (const [strategy, path, mixed] of [["cheerio", "/", false], ["http", "/json"
   assert.equal(Schema.decodeUnknownSync(BidDraft)(result.records[0]).title, "Bridge repair", JSON.stringify(result))
   assert.ok(result.visitedCount > 0)
 }
+console.log("Checking shared page budget and deduplication across all three strategies")
+const mixedManifest = manifest("playwright", "http://fixture.test/rendered", true)
+const boundedManifest: Manifest = {
+  ...mixedManifest,
+  routes: [...mixedManifest.routes, { label: "api", strategy: "http", waitFor: null }],
+  limits: { ...mixedManifest.limits, maxPages: 3 },
+}
+const bounded = await runner.run({
+  ...baseFiles,
+  "manifest.json": JSON.stringify(boundedManifest),
+  "scraper.ts": code.slice(0, code.indexOf("export function discover")) + `
+export function discover(input: PageInput): RequestSpec[] {
+  return input.label === 'index' ? [
+    { url: 'http://fixture.test/detail', label: 'detail' },
+    { url: 'http://fixture.test/detail', label: 'detail' },
+    { url: 'http://fixture.test/json', label: 'api' },
+    { url: 'http://fixture.test/page2', label: 'index' },
+  ] : [];
+}`,
+}, ["fixture.test"], { signal, timeoutSeconds: 120, fixture: true })
+assert.deepEqual(bounded.errors, [], JSON.stringify(bounded))
+assert.equal(bounded.visitedCount, 3, "One shared page budget, with duplicates handled by Crawlee")
+assert.equal(bounded.records.length, 2, "Cheerio and HTTP both run after the Playwright index")
+assert.match(bounded.coverage, /Bounded at 3 pages/)
 console.log("Checking investigation snapshots")
 const inspected = await runner.run({ "manifest.json": JSON.stringify(manifest("playwright", "http://fixture.test/rendered")) }, ["fixture.test"], { signal, timeoutSeconds: 90, inspect: true, fixture: true })
 assert.ok(inspected.evidence[0]?.html?.includes("Bridge repair"))

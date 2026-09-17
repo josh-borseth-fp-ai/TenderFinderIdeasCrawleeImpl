@@ -2,6 +2,14 @@
 
 Read `CLAUDE.md` for architecture, commands, and Effect conventions.
 
+## Prefer Effect and existing domain libraries
+
+- Always check the installed Effect APIs before writing general-purpose infrastructure or adding another package for behavior Effect already provides. Prefer Effect for concurrency, synchronization, cancellation, resource lifecycles, retries, timeouts, scheduling, queues, caching, configuration, and schema validation.
+- Use `Semaphore` for mutual exclusion and bounded concurrency, `Latch`/`Deferred` for coordination, and scoped fibers/resources for cancellation and cleanup. Prefer automatic permit/resource release (`withPermit`, `withPermits`, `acquireRelease`) over manual bookkeeping. Use manual permits only when a third-party lifecycle splits acquisition and release across callbacks, and document that boundary.
+- Keep Effect programs composable internally; run them at application entry points or Promise-based third-party callback boundaries. Do not build a second concurrency runtime or add a wrapper library around primitives Effect already supplies. Keep UI components on the existing Effect Atom integration.
+- Let Crawlee own request queues, deduplication, retries, and per-crawler concurrency/rate limits. Do not recreate them with Effect queues or custom schedulers. Reserve Effect coordination for application rules that span crawler instances (shared job budgets and host limits) and browser ownership.
+- Specialized libraries remain appropriate for capabilities Effect does not provide (for example Crawlee/Playwright, proxy-chain, Drizzle, and Dockerode). Check the pinned Effect version's typings and document a concrete capability gap before introducing an overlapping dependency or custom infrastructure.
+
 ## Model data with Effect Schema
 
 - Define application data with Effect Schema first, rather than handwritten TypeScript interfaces or object/union aliases. This includes domain records, statuses, API messages, persisted payloads, configuration data, and runner/package protocols.

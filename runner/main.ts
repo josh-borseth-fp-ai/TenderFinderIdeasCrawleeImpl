@@ -1,5 +1,4 @@
-import { Schema } from "effect"
-import { Mutex, Semaphore } from "async-mutex"
+import { Effect, Schema, Semaphore } from "effect"
 import { createRelay } from "./socket-relay.ts"
 import { readFileSync } from "node:fs"
 import { pathToFileURL } from "node:url"
@@ -26,22 +25,27 @@ const module: ScraperModule | null = inspect ? null : await import(pathToFileURL
 if (module && (typeof module.extract !== "function" || typeof module.discover !== "function")) throw new Error("Package must export extract and discover")
 const crawlers = new Map<string, Pick<BasicCrawler, "stop" | "addRequests" | "run" | "teardown">>()
 const queues = new Map<string, RequestQueue>()
-const admission = new Mutex()
+// RequestQueue owns deduplication/retries. This permit protects the job-wide
+// budget across HTTP, Cheerio, and Playwright queues (Crawlee limits are per instance).
+const admission = Semaphore.makeUnsafe(1)
 let admitted = 0
 const robots = new Map<string, Promise<RobotsTxtFile>>()
 const sessions = new Set<BrowserSession>()
 let outstanding = 0, stopped = false
-const hosts = new Map<string, { slots: Semaphore; nextStart: number }>()
+// Share host limits across strategies; per-crawler sameDomainDelaySecs cannot do that.
+const hosts = new Map<string, { slots: Semaphore.Semaphore; nextStart: number }>()
 const releases = new Map<string, () => void>()
 async function acquire(request: { url: string; uniqueKey: string }) {
   const host = new URL(request.url).hostname
   let gate = hosts.get(host)
-  if (!gate) { gate = { slots: new Semaphore(2), nextStart: 0 }; hosts.set(host, gate) }
-  const [, unlock] = await gate.slots.acquire()
-  releases.set(request.uniqueKey, unlock)
+  if (!gate) { gate = { slots: Semaphore.makeUnsafe(2), nextStart: 0 }; hosts.set(host, gate) }
+  const slots = gate.slots
+  // Crawlee splits acquisition and release across navigation, retry, and completion hooks.
+  await Effect.runPromise(slots.take(1))
+  releases.set(request.uniqueKey, () => { Effect.runSync(slots.release(1)) })
   const start = Math.max(Date.now(), gate.nextStart)
   gate.nextStart = start + 1000
-  if (start > Date.now()) await new Promise((resolve) => setTimeout(resolve, start - Date.now()))
+  if (start > Date.now()) await Effect.runPromise(Effect.sleep(start - Date.now()))
 }
 function release(request: { uniqueKey: string }) { releases.get(request.uniqueKey)?.(); releases.delete(request.uniqueKey) }
 const pattern = (url: string, rule: string) => new RegExp(rule.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*"), "i").test(url)
@@ -53,7 +57,11 @@ function allowed(value: string) {
 }
 function stop() { if (stopped) return; stopped = true; for (const crawler of crawlers.values()) crawler.stop() }
 function complete(request: { uniqueKey: string }) { release(request); outstanding--; if (outstanding === 0) stop() }
-const enqueue = (spec: RequestSpec) => admission.runExclusive(async () => {
+class CrawlAdmissionError extends Schema.TaggedError<CrawlAdmissionError>()("CrawlAdmissionError", {
+  message: Schema.String,
+  cause: Schema.Unknown,
+}) {}
+const enqueue = (spec: RequestSpec) => Effect.runPromise(admission.withPermit(Effect.tryPromise({ try: async () => {
   if (stopped) return
   const url = new URL(spec.url); url.hash = ""
   if (!allowed(url.href)) return
@@ -71,7 +79,7 @@ const enqueue = (spec: RequestSpec) => admission.runExclusive(async () => {
     if (result.wasAlreadyPresent) outstanding--
     else admitted++
   } catch (error) { outstanding--; throw error }
-})
+}, catch: (cause) => new CrawlAdmissionError({ message: cause instanceof Error ? cause.message : String(cause), cause }) })))
 async function consume(input: PageInput, strategy: Strategy) {
   if (!allowed(input.url)) throw new Error("Redirected to an excluded URL")
   output.visitedCount++
