@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { Mutex, Semaphore } from "async-mutex"
-import { createServer, connect } from "node:net"
+import { createRelay } from "./socket-relay.ts"
 import { readFileSync } from "node:fs"
 import { pathToFileURL } from "node:url"
 import { HttpCrawler, CheerioCrawler, PlaywrightCrawler, ProxyConfiguration, Configuration, RequestQueue, Log, LogLevel, type BasicCrawler } from "crawlee"
@@ -17,12 +17,7 @@ const output: RunnerResult = {
 }
 // The container has --network none. This loopback proxy is its only network path;
 // the Unix socket is served by a separate trusted container over a named volume.
-const forwarder = createServer((client) => {
-  const upstream = connect("/proxy/egress.sock")
-  client.pipe(upstream); upstream.pipe(client)
-  client.on("error", () => upstream.destroy()); upstream.on("error", () => client.destroy())
-  client.on("close", () => upstream.destroy()); upstream.on("close", () => client.destroy())
-})
+const forwarder = createRelay({ path: "/proxy/egress.sock" })
 await new Promise<void>((resolve) => forwarder.listen(3128, "127.0.0.1", resolve))
 const proxyUrl = "http://127.0.0.1:3128"
 const proxyConfiguration = new ProxyConfiguration({ proxyUrls: [proxyUrl] })

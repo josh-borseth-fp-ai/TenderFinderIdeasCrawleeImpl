@@ -10,6 +10,7 @@
     "effect": "4.0.0-rc.113",
     "ipaddr.js": "2.3.0",
     "playwright": "1.59.1",
+    "proxy-chain": "2.7.1",
     "tsx": "4.20.6",
     "typescript": "5.9.3"
   }

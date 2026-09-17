@@ -3,7 +3,7 @@ import { createServer } from "node:http"
 /** Deterministic websites used only by the isolated runner integration suite. */
 export async function startFixtures(): Promise<number> {
   const server = createServer((request, response) => {
-    const path = request.url ?? "/"
+    const path = new URL(request.url ?? "/", "http://fixture.test").pathname
     if (path === "/robots.txt") { response.end("User-agent: *\nAllow: /\nDisallow: /forbidden"); return }
     if (path === "/json") { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ bids: [{ title: "Bridge repair", sourceUrl: "http://fixture.test/detail", evidence: "Bridge repair", status: "open" }] })); return }
     if (path === "/private-redirect") { response.writeHead(302, { location: "http://127.0.0.1/" }); response.end(); return }

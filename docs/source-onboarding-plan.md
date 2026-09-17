@@ -19,7 +19,7 @@ stages that do not require rendering.
   and awaiting-human ownership. Retain the same page/context during pauses, gate
   automated actions, and distinguish human waiting from execution deadlines.
 - Keep the browser and generated code in the worker. Use a network-disabled
-  container and a public-address/domain-filtered proxy over a Unix socket; generated
+  container and a public-address/domain-filtered `proxy-chain` gateway over a Unix socket; generated
   code cannot directly contact the host, private networks, or the internet.
 
 ## Stage 2 — live browser assistance (follow-up)
@@ -50,7 +50,9 @@ reopen saved results. Test static, JSON, browser, and mixed strategies.
 Use the installed Effect stack for jobs, lifecycle cleanup, structured model output,
 typed APIs, SSE and reactive UI state. Use Drizzle ORM/Kit for SQLite and migrations,
 Dockerode for containers, async-mutex for browser input and crawl permits,
-Bun.Archive for tar downloads, and csv-stringify for exports. Crawlee RequestQueue
+Bun.Archive for tar downloads, csv-stringify for exports, and Apify's proxy-chain
+for HTTP forwarding and CONNECT tunnels. Keep destination policy separate from
+transport; use library traffic counters and Node pipeline for the Unix relay. Crawlee RequestQueue
 owns URL deduplication. Keep the explicit mixed-strategy coordinator and source
 network policy; AdaptivePlaywrightCrawler remains experimental and is not a
 replacement for the complete HTTP/JSON and interactive-browser contract.

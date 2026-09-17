@@ -42,7 +42,12 @@ Empty manual runs are allowed, but empty validation samples cannot be approved.
 The worker supports HTTP, Cheerio, Playwright, and mixed routes. Generated code
 runs as a non-root user in disposable, resource-limited containers with no network
 interface, host secrets, or Docker socket. A separate trusted gateway exposes a
-domain-filtered public-address proxy over a shared Unix socket. Both HTTP and
+domain-filtered public-address proxy over a shared Unix socket. Apify's
+`proxy-chain` owns HTTP forwarding, HTTPS tunnels, and connection cleanup;
+`runner/proxy-policy.ts` contains our domain/port checks and DNS address pinning.
+The gateway enforces a 30-second idle timeout and monitors a 100 MiB per-run
+traffic budget using library counters every 100 ms (brief overshoot is possible).
+Both HTTP and
 browser traffic use this path; redirects cannot bypass connection-time address
 checks. Fixture tests have no gateway. Source domains must include any essential
 public asset/API hosts; HTTP port 80 and HTTPS port 443 are supported.
