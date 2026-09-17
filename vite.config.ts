@@ -6,4 +6,7 @@ import { defineConfig } from "vite"
 export default defineConfig({
   plugins: [tanstackStart(), viteReact(), tailwindcss()],
   resolve: { tsconfigPaths: true },
+  // The dependency scan visits server routes before Start strips their handlers.
+  // Dockerode's SSH transport contains native addons that cannot be prebundled.
+  optimizeDeps: { exclude: ["dockerode"] },
 })
