@@ -8,13 +8,16 @@ stages that do not require rendering.
 
 - Persist source briefs, conversations, immutable candidate packages, validation,
   approvals, jobs, and results in SQLite and a local artifact directory.
-- Provide source-library and chat/review screens for scope, sample bid records,
-  validation, package files, and the runbook. Preserve ordinary chat.
+- Provide one saved chat with URL discovery, inline full opportunity collections,
+  conversation history, and source confirmation after collection. Keep technical
+  setup, validation, versions, package files, and runbooks internal.
 - Investigate public HTML/JSON and rendered pages. Generate TypeScript scrapers,
   fixture tests, SCRAPER.md, and minimal metadata. Automatically repair up to three
   times; ask about missing intent rather than inventing it.
-- Validate in an isolated Docker runner. Require passing tests and a nonempty live
-  sample before explicit approval. Manual runs use the exact approved version.
+- Validate in an isolated Docker runner. Require passing tests and verified live
+  extraction (or explicit zero-total evidence), then collect all opportunities before source confirmation.
+  Collection batches resume through persistent Crawlee queues and browser cursors.
+  Refreshes use the exact confirmed version.
 - Establish a browser-session controller with agent-controlled, human-controlled,
   and awaiting-human ownership. Retain the same page/context during pauses, gate
   automated actions, and distinguish human waiting from execution deadlines.
@@ -33,7 +36,7 @@ stages that do not require rendering.
   context with cookies intact. Suspend handler deadlines during bounded human
   waiting. Handle disconnects and expired ownership leases explicitly.
 - Permit human resolution of login/CAPTCHA barriers in this stage. Stage 1 reports
-  those barriers and cannot approve an empty/blocked preview.
+  those barriers and keeps blocked collections incomplete.
 
 ## Defaults and acceptance
 
@@ -41,9 +44,11 @@ Single trusted operator; public web/JSON; standard procurement plus commercial
 fields; open bids by default; missing facts remain null. No scheduled runs,
 multi-tenancy, or attachment parsing. Store attachment links. Resource-bounded
 execution, cancellation, restart recovery, stale-approval protection, and fixture
-tests are required. Acceptance: guidance → investigation → generated package →
-passing fixture/live validation → sample/runbook review → approval → manual run →
-reopen saved results. Test static, JSON, browser, and mixed strategies.
+tests are required. Acceptance: URL → investigation → generated package →
+internal fixture/live validation → full collection → confirm source → refresh →
+reopen all saved results. Records persist individually and page at 50 per page;
+exports include the full dataset. A cap, failure, or unresolved page cannot imply
+complete coverage. Test static, JSON, browser, and mixed strategies.
 
 ## Implementation simplification
 

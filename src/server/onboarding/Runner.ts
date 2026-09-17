@@ -1,15 +1,15 @@
 import Docker from "dockerode"
 import { Effect, Schedule, Schema } from "effect"
-import { mkdtempSync, writeFileSync, symlinkSync, rmSync, chmodSync } from "node:fs"
+import { mkdirSync, mkdtempSync, writeFileSync, symlinkSync, rmSync, chmodSync, realpathSync, readdirSync, openSync, closeSync, fstatSync, readFileSync, unlinkSync, constants, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { PassThrough, type Duplex } from "node:stream"
 import { createInterface } from "node:readline"
 import { MANUAL_LIMITS, RunnerResult, RunnerBatch, RuntimePin, PackageFiles } from "../../../runner/contract.ts"
 export { RunnerResult } from "../../../runner/contract.ts"
 
-export interface RunOptions { signal: AbortSignal; timeoutSeconds: number; inspect?: boolean; test?: boolean; fixture?: boolean; onProgress?: (partial: RunnerResult) => void }
+export interface RunOptions { signal: AbortSignal; timeoutSeconds: number; inspect?: boolean; test?: boolean; fixture?: boolean; onProgress?: (partial: RunnerResult) => void; collectionDirectory?: string; onRecords?: (records: readonly unknown[]) => void }
 export interface PackageRunner {
   identity?(signal: AbortSignal): Promise<string>
   run(files: PackageFiles, domains: readonly string[], options: RunOptions): Promise<RunnerResult>
@@ -17,6 +17,27 @@ export interface PackageRunner {
 
 const hardened: Docker.HostConfig = { CapDrop: ["ALL"], SecurityOpt: ["no-new-privileges"], ReadonlyRootfs: true }
 const node = ["node", "--import", "/opt/runner/node_modules/tsx/dist/loader.mjs"]
+
+/** Read only after the worker has stopped. Its storage is untrusted: never follow
+ * links out of the collection or accept unbounded/malformed delivery files. */
+export function recoverRecordDelivery(directory: string, onRecords: (records: readonly unknown[]) => void) {
+  const root = realpathSync(directory), delivery = join(root, "record-delivery")
+  if (!existsSync(delivery)) return
+  if (realpathSync(delivery) !== delivery) throw new Error("Invalid record delivery directory")
+  for (const name of readdirSync(delivery)) {
+    if (!/^[a-f0-9-]{36}\.json$/.test(name)) continue
+    const path = join(delivery, name)
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+    try {
+      const stat = fstatSync(fd)
+      if (!stat.isFile() || stat.size > 8 * 1024 * 1024) throw new Error("Invalid record delivery file")
+      const batch = Schema.decodeSync(Schema.fromJsonString(RunnerBatch))(readFileSync(fd, "utf8"))
+      if (batch.records.length > 100) throw new Error("Invalid record delivery batch")
+      onRecords(batch.records)
+    } finally { closeSync(fd) }
+    unlinkSync(path)
+  }
+}
 
 export class DockerRunner implements PackageRunner {
   constructor(
@@ -42,7 +63,7 @@ export class DockerRunner implements PackageRunner {
   }
 
   /** Dockerode demultiplexes Docker's transport; readline handles UTF-8 and framing. */
-  private async execute(config: Docker.ContainerCreateOptions, signal: AbortSignal, onLine?: (line: string) => void) {
+  private async execute(config: Docker.ContainerCreateOptions, signal: AbortSignal, onLine?: (line: string) => void, streaming = false, onStopped?: () => void) {
     signal.throwIfAborted()
     const container = this.docker.getContainer(config.name!)
     const stdout = new PassThrough(), stderr = new PassThrough()
@@ -52,8 +73,9 @@ export class DockerRunner implements PackageRunner {
       for await (const chunk of stream) {
         const buffer = Buffer.from(chunk as Uint8Array)
         bytes += buffer.length
-        if (bytes > 30 * 1024 * 1024) throw new Error("Runner output exceeded its size limit")
+        if (!streaming && bytes > 30 * 1024 * 1024) throw new Error("Runner output exceeded its size limit")
         chunks.push(buffer)
+        if (streaming) while (chunks.length > 1 && chunks.reduce((sum, part) => sum + part.length, 0) > 64 * 1024) chunks.shift()
       }
     }
     let attached: NodeJS.ReadWriteStream | undefined
@@ -81,9 +103,16 @@ export class DockerRunner implements PackageRunner {
       return { code: result.StatusCode as number, output: Buffer.concat(chunks).toString("utf8") }
     } finally {
       signal.removeEventListener("abort", cancel)
-      await container.remove({ force: true }).catch(() => {})
+      let removed = false
+      await container.remove({ force: true }).then(() => { removed = true }).catch((error: unknown) => {
+        if (error && typeof error === "object" && "statusCode" in error && error.statusCode === 404) removed = true
+      })
       stdout.destroy(); stderr.destroy()
       if (attached) (attached as Duplex).destroy()
+      if (onStopped) {
+        if (!removed) throw new Error("Could not verify worker shutdown; record delivery will resume after recovery")
+        onStopped()
+      }
     }
   }
 
@@ -93,8 +122,21 @@ export class DockerRunner implements PackageRunner {
     const directory = mkdtempSync(join(tmpdir(), "bid-desk-"))
     let gateway: Docker.Container | undefined
     let volume: Docker.Volume | undefined
+    const Labels: Record<string, string> = { "bid-desk.runner": "true", "bid-desk.owner": this.owner }
     try {
       const image = files["runtime.json"] ? Schema.decodeSync(Schema.fromJsonString(RuntimePin))(files["runtime.json"]).image : this.image
+      if (options.collectionDirectory) {
+        if (files["runtime.json"] && Schema.decodeSync(Schema.fromJsonString(RuntimePin))(files["runtime.json"]).contractVersion !== 2) throw new Error("This saved scraper needs regeneration to support full collection.")
+        mkdirSync(options.collectionDirectory, { recursive: true, mode: 0o777 })
+        chmodSync(options.collectionDirectory, 0o777)
+        if (!options.onRecords) throw new Error("Collection requires a durable record consumer")
+        Labels["bid-desk.collection"] = createHash("sha256").update(realpathSync(options.collectionDirectory)).digest("hex")
+        // A previous Docker connection failure may have left a worker alive.
+        // Confirm its removal before replaying files or mounting the same queue.
+        const abandoned = await this.docker.listContainers({ all: true, filters: { label: ["bid-desk.runner=true", `bid-desk.collection=${Labels["bid-desk.collection"]}`] } })
+        for (const container of abandoned) await this.docker.getContainer(container.Id).remove({ force: true })
+        recoverRecordDelivery(options.collectionDirectory, options.onRecords)
+      }
       for (const [name, content] of Object.entries(files)) {
         if (!/^[a-zA-Z0-9_.-]+$/.test(name)) throw new Error("Unsafe package filename")
         writeFileSync(join(directory, name), content, { mode: 0o644 })
@@ -102,7 +144,6 @@ export class DockerRunner implements PackageRunner {
       chmodSync(directory, 0o755)
       symlinkSync("/opt/runner/node_modules", join(directory, "node_modules"))
       await this.docker.getImage(image).inspect().catch(() => { throw new Error("Runtime image is unavailable. Build or restore the package's pinned image.") })
-      const Labels = { "bid-desk.runner": "true", "bid-desk.owner": this.owner }
       if (!options.test) {
         volume = this.docker.getVolume(volumeName)
         await this.docker.createVolume({ Name: volumeName, Labels })
@@ -127,6 +168,7 @@ export class DockerRunner implements PackageRunner {
           NanoCpus: 2_000_000_000, PidsLimit: 256, ShmSize: 256 * 1024 ** 2, Tmpfs: { "/tmp": "rw,nosuid,size=256m,mode=1777" },
           Mounts: [
             { Type: "bind", Source: directory, Target: "/work", ReadOnly: true },
+            ...(options.collectionDirectory ? [{ Type: "bind" as const, Source: options.collectionDirectory, Target: "/store" }] : []),
             ...(!options.test ? [{ Type: "volume" as const, Source: volumeName, Target: "/proxy", ReadOnly: true }] : []),
           ],
         },
@@ -140,14 +182,18 @@ export class DockerRunner implements PackageRunner {
       }
       const partial: RunnerResult = { records: [], evidence: [], errors: [], visitedCount: 0, coverage: "Execution in progress; results are partial." }
       let decoded: RunnerResult | undefined
-      const result = await this.execute({ ...base, Cmd: [...node, "/opt/runner/main.ts", ...(options.inspect ? ["--inspect"] : [])] }, signal, (line) => {
+      const result = await this.execute({ ...base, Cmd: [...node, "/opt/runner/main.ts", ...(options.inspect ? ["--inspect"] : []), ...(options.collectionDirectory ? ["--collect"] : [])] }, signal, (line) => {
         if (line.startsWith("BID_DESK_RESULT=")) { decoded = Schema.decodeSync(Schema.fromJsonString(RunnerResult))(line.slice("BID_DESK_RESULT=".length)); return }
         if (!line.startsWith("BID_DESK_BATCH=")) return
         const batch = Schema.decodeSync(Schema.fromJsonString(RunnerBatch))(line.slice("BID_DESK_BATCH=".length))
+        if (options.collectionDirectory) { options.onRecords?.(batch.records); return }
         if (partial.records.length + batch.records.length > MANUAL_LIMITS.maxRecords) throw new Error("Invalid runner checkpoint")
         partial.records.push(...batch.records); partial.visitedCount = batch.visitedCount
         options.onProgress?.(partial)
-      })
+      }, !!options.collectionDirectory, options.collectionDirectory ? () => {
+        // Only read worker files once removal is confirmed, including cancellation.
+        if (options.collectionDirectory && options.onRecords) recoverRecordDelivery(options.collectionDirectory, options.onRecords)
+      } : undefined)
       if (!decoded) throw new Error(`Runner failed (${result.code}): ${result.output.slice(-6000)}`)
       if (result.code !== 0 && decoded.errors.length === 0) decoded.errors.push(`Runner exited with code ${result.code}`)
       return decoded

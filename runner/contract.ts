@@ -52,12 +52,19 @@ const VisitedCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 const RawRecords = Schema.mutable(Schema.Array(Schema.Unknown).check(Schema.isMaxLength(MANUAL_LIMITS.maxRecords)))
 export const RunnerBatch = Schema.Struct({ records: RawRecords, visitedCount: VisitedCount })
 export type RunnerBatch = typeof RunnerBatch.Type
+export const CollectionBatch = Schema.Struct({ complete: Schema.Boolean, pending: VisitedCount, processed: VisitedCount, expectedCount: Schema.NullOr(VisitedCount), issues: Texts })
+export type CollectionBatch = typeof CollectionBatch.Type
 export const RunnerResult = Schema.Struct({
   ...RunnerBatch.fields, visitedCount: Schema.mutableKey(VisitedCount), evidence: Schema.mutable(Schema.Array(Evidence)), errors: Texts, coverage: Schema.mutableKey(Schema.String),
+  observedUrls: Schema.optional(Texts),
+  expectedCount: Schema.optional(Schema.NullOr(VisitedCount)),
+  collection: Schema.optional(CollectionBatch),
 })
 export type RunnerResult = typeof RunnerResult.Type
+export const BrowserCheckpoint = Schema.Struct({ page: PageInput, cursor: Schema.String })
+export type BrowserCheckpoint = typeof BrowserCheckpoint.Type
 export const RuntimePin = Schema.Struct({
-  image: Schema.String.check(Schema.isPattern(/^sha256:[a-f0-9]{64}$/)), contractVersion: Schema.Literal(1),
+  image: Schema.String.check(Schema.isPattern(/^sha256:[a-f0-9]{64}$/)), contractVersion: Schema.Literals([1, 2]),
 })
 export const PackageFiles = Schema.Record(Schema.String, Schema.String)
 export type PackageFiles = typeof PackageFiles.Type
@@ -77,5 +84,7 @@ export interface BrowserActions {
 export interface ScraperModule {
   extract(input: PageInput): BidDraft[] | Promise<BidDraft[]>
   discover(input: PageInput): RequestSpec[] | Promise<RequestSpec[]>
+  expectedCount?(input: PageInput): number | null
+  browsePages?(browser: BrowserActions, input: PageInput, cursor: string | null): AsyncGenerator<BrowserCheckpoint>
   browse?(browser: BrowserActions, input: PageInput): Promise<PageInput[]>
 }

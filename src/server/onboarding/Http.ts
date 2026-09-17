@@ -1,3 +1,4 @@
+import { stringify } from "csv-stringify/sync"
 import { Sse } from "effect/unstable/encoding"
 import { BidRecord } from "../../domain/Source.ts"
 import { Effect, Schema, Stream } from "effect"
@@ -21,6 +22,20 @@ export async function sourceApi(request: Request): Promise<Response> {
     const rejected = await checkSourceRequest(request)
     if (rejected) return rejected
     const service = await onboarding()
+    const collectionId = url.searchParams.get("collectionId")
+    if (collectionId) {
+      const exportCount = service.store.collection(collectionId).count
+      let page = 1
+      const encoder = new TextEncoder()
+      return new Response(new ReadableStream<Uint8Array>({ pull(controller) {
+        try {
+          const result = service.store.resultPage(collectionId, page)
+          const csv = stringify(result.records.slice(0, Math.max(0, exportCount - (page - 1) * 50)), { columns: Object.keys(BidRecord.fields), header: page === 1, quoted: true, escape_formulas: true, cast: { object: (value) => JSON.stringify(value) } })
+          if (csv) controller.enqueue(encoder.encode(csv))
+          if (page++ * 50 >= exportCount) controller.close()
+        } catch (error) { controller.error(error) }
+      } }), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="opportunities-${collectionId}.csv"` } })
+    }
     const versionId = url.searchParams.get("versionId"), jobId = url.searchParams.get("jobId")
     const kind = url.searchParams.get("kind")
     if (versionId) {

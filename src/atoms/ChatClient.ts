@@ -3,9 +3,8 @@ import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } fr
 import {
   type ChatEvent,
   ChatInfo,
-  type ChatMessage,
   decodeChatEvent,
-  encodeChatRequest,
+  SavedChatRequest,
 } from "@/domain/Chat"
 
 export class ChatClientError extends Schema.TaggedError<ChatClientError>()("ChatClientError", {
@@ -15,7 +14,7 @@ export class ChatClientError extends Schema.TaggedError<ChatClientError>()("Chat
 const toClientError = (e: { readonly message: string }) => new ChatClientError({ message: e.message })
 
 interface Shape {
-  readonly send: (messages: ReadonlyArray<ChatMessage>) => Stream.Stream<ChatEvent, ChatClientError>
+  readonly send: (request: SavedChatRequest) => Stream.Stream<ChatEvent, ChatClientError>
   readonly info: Effect.Effect<ChatInfo, ChatClientError>
 }
 
@@ -26,9 +25,9 @@ export class ChatClient extends Context.Service<ChatClient, Shape>()("@app/ChatC
     Effect.gen(function* () {
       const http = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk)
 
-      const send: Shape["send"] = (messages) =>
+      const send: Shape["send"] = (request) =>
         HttpClientRequest.post("/api/chat").pipe(
-          HttpClientRequest.bodyJsonUnsafe(encodeChatRequest({ messages })),
+          HttpClientRequest.bodyJsonUnsafe(Schema.encodeSync(SavedChatRequest)(request)),
           http.execute,
           HttpClientResponse.stream,
           Stream.decodeText(),

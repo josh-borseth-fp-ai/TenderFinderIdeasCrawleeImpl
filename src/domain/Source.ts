@@ -45,6 +45,7 @@ export const RuntimePackageJson = Schema.StructWithRest(Schema.Struct({
 }), [Schema.Record(Schema.String, Schema.Unknown)])
 
 export const AgentDecision = Schema.Union([
+  Schema.Struct({ action: Schema.Literal("configure"), name: Schema.String, seedUrls: Schema.Array(Schema.String), allowedDomains: Schema.Array(Schema.String) }),
   Schema.Struct({ action: Schema.Literal("inspect"), url: Schema.String, strategy: Strategy, reason: Schema.String }),
   Schema.Struct({ action: Schema.Literal("question"), message: Schema.String }),
   Schema.Struct({ action: Schema.Literal("generate"), package: PackageDraft }),
@@ -59,6 +60,7 @@ export const ValidationReport = Schema.Struct({
   passed: Schema.Boolean, testsPassed: Schema.Boolean, errors: Schema.mutable(Schema.Array(Schema.String)), warnings: Schema.mutable(Schema.Array(Schema.String)),
   recordCount: Schema.Int, excludedCount: Schema.Int, duplicateCount: Schema.Int, visitedCount: Schema.Int,
   coverage: Schema.String, checkedAt: Schema.String,
+  emptyVerified: Schema.optional(Schema.Boolean),
 })
 export type ValidationReport = typeof ValidationReport.Type
 export const ScraperVersion = Schema.Struct({
@@ -68,7 +70,8 @@ export const ScraperVersion = Schema.Struct({
 })
 export type ScraperVersion = typeof ScraperVersion.Type
 export const Job = Schema.Struct({
-  id: Schema.String, sourceId: Schema.String, kind: Schema.Literals(["generate", "validate", "run"]), versionId: NullableText,
+  id: Schema.String, sourceId: Schema.String, kind: Schema.Literals(["generate", "validate", "run", "collect"]), versionId: NullableText,
+  collectAfter: Schema.optional(Schema.Boolean), conversationId: Schema.optional(Schema.String),
   revision: Schema.Int, state: Schema.Literals(["queued", "running", "succeeded", "failed", "cancelled", "interrupted", "needs-input"]),
   message: Schema.String, createdAt: Schema.String, updatedAt: Schema.String, report: Schema.NullOr(ValidationReport),
 })
@@ -78,11 +81,6 @@ export const ProgressEvent = Schema.Struct({ id: Schema.Int, jobId: Schema.Strin
 export type ProgressEvent = typeof ProgressEvent.Type
 export const SourceDetail = Schema.Struct({ source: Source, messages: Schema.mutable(Schema.Array(SourceMessage)), versions: Schema.mutable(Schema.Array(ScraperVersion)), jobs: Schema.mutable(Schema.Array(Job)) })
 export type SourceDetail = typeof SourceDetail.Type
-
-export const SourceReviewTab = Schema.Literals(["Scope", "Samples", "Validation", "Runbook", "Files", "Runs"])
-export type SourceReviewTab = typeof SourceReviewTab.Type
-export const sourceReviewTabs = SourceReviewTab.literals
-export const decodeSourceReviewTab = Schema.decodeUnknownSync(SourceReviewTab)
 
 export const SourceCommand = Schema.Union([
   Schema.Struct({ action: Schema.Literal("create"), brief: SourceBrief }),
