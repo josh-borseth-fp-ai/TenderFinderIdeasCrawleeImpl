@@ -23,14 +23,23 @@ export const BidDraft = Schema.Struct({
   eligibility: Schema.optional(NullableText), submissionInstructions: Schema.optional(NullableText),
 })
 export type BidDraft = typeof BidDraft.Type
+const Limits = Schema.Struct({
+  maxPages: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  maxRecords: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  timeoutSeconds: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+})
+export const MANUAL_LIMITS = Limits.make({ maxPages: 1000, maxRecords: 10_000, timeoutSeconds: 1800 })
+export const PREVIEW_LIMITS = Limits.make({ maxPages: 50, maxRecords: 200, timeoutSeconds: 600 })
+export const REVIEW_SAMPLE_LIMIT = 20
+
 export const Manifest = Schema.Struct({
   formatVersion: Schema.Literal(1), sourceId: Schema.String, revision: Schema.Int,
   entrypoint: Schema.Literal("scraper.ts"), seedUrls: Texts, allowedDomains: Texts,
   includePatterns: Texts, excludePatterns: Texts, routes: Schema.mutable(Schema.Array(RouteSpec)),
   limits: Schema.Struct({
-    maxPages: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-    maxRecords: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 10_000 })),
-    timeoutSeconds: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1800 })),
+    maxPages: Limits.fields.maxPages.check(Schema.isLessThanOrEqualTo(MANUAL_LIMITS.maxPages)),
+    maxRecords: Limits.fields.maxRecords.check(Schema.isLessThanOrEqualTo(MANUAL_LIMITS.maxRecords)),
+    timeoutSeconds: Limits.fields.timeoutSeconds.check(Schema.isLessThanOrEqualTo(MANUAL_LIMITS.timeoutSeconds)),
   }),
 })
 export type Manifest = typeof Manifest.Type
@@ -40,7 +49,7 @@ export const Evidence = Schema.Struct({
 })
 export type Evidence = typeof Evidence.Type
 const VisitedCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
-const RawRecords = Schema.mutable(Schema.Array(Schema.Unknown).check(Schema.isMaxLength(10_000)))
+const RawRecords = Schema.mutable(Schema.Array(Schema.Unknown).check(Schema.isMaxLength(MANUAL_LIMITS.maxRecords)))
 export const RunnerBatch = Schema.Struct({ records: RawRecords, visitedCount: VisitedCount })
 export type RunnerBatch = typeof RunnerBatch.Type
 export const RunnerResult = Schema.Struct({

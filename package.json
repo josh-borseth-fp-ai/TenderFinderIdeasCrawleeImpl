@@ -39,6 +39,7 @@
     "dockerode": "5.0.1",
     "drizzle-orm": "1.0.0-rc.4",
     "effect": "4.0.0-rc.113",
+    "handlebars": "4.7.9",
     "ipaddr.js": "2.3.0",
     "lucide-react": "^1.44.0",
     "proxy-chain": "2.7.1",

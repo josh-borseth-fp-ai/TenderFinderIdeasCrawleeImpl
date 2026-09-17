@@ -16,7 +16,7 @@ const controller = new AbortController()
 process.once("SIGINT", () => controller.abort())
 const runner = new DockerRunner()
 await runner.run(files, [], { signal: controller.signal, timeoutSeconds: 120, test: true })
-const result = await runner.run(files, brief.allowedDomains, { signal: controller.signal, timeoutSeconds: Math.min(1800, Math.max(1, manifest.limits.timeoutSeconds)) })
+const result = await runner.run(files, brief.allowedDomains, { signal: controller.signal, timeoutSeconds: manifest.limits.timeoutSeconds })
 const validated = validateRecords(result.records, manifest.sourceId, brief, { testsPassed: true, visitedCount: result.visitedCount, errors: result.errors, coverage: result.coverage })
 console.log(JSON.stringify(validated, null, 2))
 if (!validated.report.passed) process.exitCode = 1

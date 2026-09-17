@@ -3,7 +3,7 @@ import { Deferred, Effect, Fiber, Queue, Schema } from "effect"
 import { AgentDecision, SourceError, Evidence, type Job, type PackageDraft, type ScraperVersion, type SourceCommand, type SourceDetail } from "../../domain/Source.ts"
 import { SourceStore, digestFiles } from "./Store.ts"
 import { permittedUrl, validateBrief, validateRecords } from "./Records.ts"
-import { Manifest, PackageFiles } from "../../../runner/contract.ts"
+import { MANUAL_LIMITS, REVIEW_SAMPLE_LIMIT, Manifest, PackageFiles } from "../../../runner/contract.ts"
 import { manifest, packageFiles, runtimeFile } from "./Packages.ts"
 import type { PackageRunner } from "./Runner.ts"
 
@@ -213,7 +213,7 @@ export class OnboardingService {
   private async validate(job: Job, version: ScraperVersion, signal: AbortSignal, manual: boolean) {
     const files = this.files(version)
     const savedManifest = Schema.decodeSync(Schema.fromJsonString(Manifest))(files["manifest.json"] ?? "null")
-    const currentManifest: Manifest = manual ? { ...savedManifest, limits: { maxPages: 1000, maxRecords: 10_000, timeoutSeconds: 1800 } } : savedManifest
+    const currentManifest: Manifest = manual ? { ...savedManifest, limits: MANUAL_LIMITS } : savedManifest
     const runFiles = { ...files, "manifest.json": JSON.stringify(currentManifest) }
     if (!manual) this.store.saveVersion({ ...version, report: null, samples: [] })
     this.store.saveJob({ ...this.store.job(job.id), report: null })
@@ -240,7 +240,7 @@ export class OnboardingService {
       signal.throwIfAborted()
       this.store.saveResults(job.id, records)
       this.store.saveJob({ ...this.store.job(job.id), report })
-      if (!manual) this.store.saveVersion({ ...version, samples: records.slice(0, 20), report })
+      if (!manual) this.store.saveVersion({ ...version, samples: records.slice(0, REVIEW_SAMPLE_LIMIT), report })
       if (!report.passed) throw new Error(report.errors.join("\n"))
     } catch (error) {
       if (!manual && !signal.aborted) {

@@ -114,6 +114,9 @@ own authenticated reverse proxy for remote access.
   Effect Latch and Deferred coordinate browser pause/resume and session closure.
   Shared admission and host limits span all strategy instances; Crawlee's own
   concurrency and rate limits remain responsible for each individual crawler.
+- Handlebars renders the runbook from `runner/SCRAPER.md.hbs`; Effect Schema
+  validates package drafts. Runtime versions and execution limits feed the template
+  from the pinned runner package and shared contract.
 - Bun.Archive creates package downloads; csv-stringify produces CSV with formula
   escaping. Node's test runner supplies structured fixture-test outcomes.
 

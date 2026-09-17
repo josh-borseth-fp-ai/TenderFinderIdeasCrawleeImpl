@@ -25,14 +25,25 @@ export const SourceBrief = Schema.Struct({
   openOnly: Schema.Boolean,
 })
 export type SourceBrief = typeof SourceBrief.Type
+const PackageContent = Schema.String.check(Schema.isPattern(/\S/, { message: "Code, tests, and runbook must contain non-whitespace content" }))
 export const PackageDraft = Schema.Struct({
   rationale: Schema.String,
-  runbook: Schema.String,
-  code: Schema.String,
-  tests: Schema.String,
-  routes: Schema.Array(RouteSpec),
-})
+  runbook: PackageContent,
+  code: PackageContent,
+  tests: PackageContent,
+  routes: Schema.Array(RouteSpec).check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(10),
+    Schema.makeFilter((routes) => routes.some((route) => route.label === "index") || "Package routes must include index"),
+    Schema.makeFilter((routes) => new Set(routes.map((route) => route.label)).size === routes.length || "Route labels must be unique"),
+  ),
+}).check(Schema.makeFilter((draft) => draft.code.length + draft.tests.length + draft.runbook.length <= 250_000 || "Generated package exceeds size limit"))
 export type PackageDraft = typeof PackageDraft.Type
+// Require the versions used in the runbook while preserving all package metadata.
+export const RuntimePackageJson = Schema.StructWithRest(Schema.Struct({
+  dependencies: Schema.StructWithRest(Schema.Struct({ crawlee: Schema.String, playwright: Schema.String }), [Schema.Record(Schema.String, Schema.String)]),
+}), [Schema.Record(Schema.String, Schema.Unknown)])
+
 export const AgentDecision = Schema.Union([
   Schema.Struct({ action: Schema.Literal("inspect"), url: Schema.String, strategy: Strategy, reason: Schema.String }),
   Schema.Struct({ action: Schema.Literal("question"), message: Schema.String }),

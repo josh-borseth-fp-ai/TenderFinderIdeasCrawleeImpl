@@ -22,4 +22,13 @@ describe("source model boundary", () => {
     const error = yield* model.decide("source brief").pipe(Effect.flip)
     expect(error._tag).toBe("SourceError")
   }).pipe(Effect.provide(layer('{"action":"approve","version":"anything"}'))))
+  it.effect("rejects incomplete generated packages during structured decoding", () => Effect.gen(function* () {
+    const model = yield* SourceModel
+    const error = yield* model.decide("source brief").pipe(Effect.flip)
+    expect(error.kind).toBe("invalid-output")
+  }).pipe(Effect.provide(layer(JSON.stringify({
+    action: "generate",
+    package: { rationale: "Static HTML", runbook: "Instructions", code: " ", tests: "tests", routes: [{ label: "index", strategy: "cheerio", waitFor: null }] },
+  })))))
+
 })

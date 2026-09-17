@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { PassThrough, type Duplex } from "node:stream"
 import { createInterface } from "node:readline"
-import { RunnerResult, RunnerBatch, RuntimePin, PackageFiles } from "../../../runner/contract.ts"
+import { MANUAL_LIMITS, RunnerResult, RunnerBatch, RuntimePin, PackageFiles } from "../../../runner/contract.ts"
 export { RunnerResult } from "../../../runner/contract.ts"
 
 export interface RunOptions { signal: AbortSignal; timeoutSeconds: number; inspect?: boolean; test?: boolean; fixture?: boolean; onProgress?: (partial: RunnerResult) => void }
@@ -144,7 +144,7 @@ export class DockerRunner implements PackageRunner {
         if (line.startsWith("BID_DESK_RESULT=")) { decoded = Schema.decodeSync(Schema.fromJsonString(RunnerResult))(line.slice("BID_DESK_RESULT=".length)); return }
         if (!line.startsWith("BID_DESK_BATCH=")) return
         const batch = Schema.decodeSync(Schema.fromJsonString(RunnerBatch))(line.slice("BID_DESK_BATCH=".length))
-        if (partial.records.length + batch.records.length > 10_000) throw new Error("Invalid runner checkpoint")
+        if (partial.records.length + batch.records.length > MANUAL_LIMITS.maxRecords) throw new Error("Invalid runner checkpoint")
         partial.records.push(...batch.records); partial.visitedCount = batch.visitedCount
         options.onProgress?.(partial)
       })
