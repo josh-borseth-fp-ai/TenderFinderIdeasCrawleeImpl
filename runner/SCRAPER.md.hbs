@@ -1,0 +1,19 @@
+# {{name}}
+
+{{runbook}}
+
+## Runtime contract
+
+{{rationale}}
+
+Uses the package's pinned self-hosted Docker runtime (Crawlee {{versions.crawlee}}, Playwright {{versions.playwright}} and bundled headless Chromium). No Browserbase or model key is required to run an approved scraper.
+
+- Offline tests: `npm ci --ignore-scripts && npm test`
+- Isolated execution, from the Bid Desk repository: `bun run scraper:run /absolute/path/to/extracted-package`
+- Build the runtime first with `bun run runner:build`. Docker must be running.
+- Preview limits: {{preview.maxPages}} pages, {{preview.maxRecords}} raw records, {{previewMinutes}} minutes; the review shows at most {{reviewSampleLimit}} valid samples.
+- Manual runs in the app: {{manual.maxPages}} pages, {{manual.maxRecords}} raw records, {{manualMinutes}} minutes. The CLI uses the limits saved in `manifest.json`. A bounded result is not exhaustive coverage.
+- Missing facts stay null; attachment links are retained without document parsing.
+- Network access is restricted to the source domains in `manifest.json` and public HTTP(S) addresses. Add required CDN/API hosts to the source brief and regenerate if necessary.
+- Login/CAPTCHA barriers require a future human-takeover integration.
+- If validation fails, inspect errors and fixture expectations, revise the source guidance, and generate a new candidate. Never edit an approved package in place.

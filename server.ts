@@ -16,6 +16,7 @@ const port = Number(process.env.PORT ?? 3000)
 
 Bun.serve({
   port,
+  hostname: process.env.HOST ?? "127.0.0.1",
   idleTimeout: 0, // SSE responses can outlive the default 10s idle timeout
   async fetch(request) {
     const url = new URL(request.url)

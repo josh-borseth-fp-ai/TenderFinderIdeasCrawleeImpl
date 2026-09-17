@@ -9,6 +9,13 @@ export const ChatMessage = Schema.Struct({
 })
 export type ChatMessage = typeof ChatMessage.Type
 
+export const MessageStatus = Schema.Literals(["streaming", "interrupted", "error"])
+export type MessageStatus = typeof MessageStatus.Type
+export const UiMessage = Schema.Struct({ ...ChatMessage.fields, status: Schema.optional(MessageStatus) })
+export type UiMessage = typeof UiMessage.Type
+export const ChatFailure = Schema.Struct({ kind: Schema.Literals(["interrupted", "error"]), message: Schema.String })
+export type ChatFailure = typeof ChatFailure.Type
+
 export const ChatRequest = Schema.Struct({
   messages: Schema.Array(ChatMessage),
 })
