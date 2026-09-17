@@ -17,6 +17,7 @@ Bun.serve({
     const auth = req.headers.get("authorization") ?? ""
     if (!auth.startsWith("Bearer ")) return Response.json({ error: { message: "Missing Authentication header", code: 401 } }, { status: 401 })
     const body = await req.json()
+    if (!body.stream && body.response_format) return Response.json({ id: "fixture-intent", object: "chat.completion", created: Math.floor(Date.now() / 1000), model: body.model, choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify({ intent: { action: "chat" } }) }, finish_reason: "stop" }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })
     const latestUser = [...(body.messages ?? [])].reverse().find((message: { role: string }) => message.role === "user")
     const scrapeUrl = typeof latestUser?.content === "string" && /scrape|read/i.test(latestUser.content)
       ? latestUser.content.match(/https?:\/\/[^\s<>]+/)?.[0] : undefined

@@ -1,38 +1,11 @@
-import { MessageCircleIcon } from "lucide-react"
+import { GlobeIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-
-const suggestions: ReadonlyArray<string> = [
-  "Summarize the key risks in a fixed-price construction bid",
-  "Write a TypeScript function that parses a CSV line, with tests",
-  "Explain Effect's Layer system like I'm a React developer",
-  "Draft a polite follow-up email to a subcontractor about a late quote",
-]
 
 export function EmptyState({ onPick }: { readonly onPick: (text: string) => void }) {
-  return (
-    <Empty className="min-h-full border-0">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <MessageCircleIcon />
-        </EmptyMedia>
-        <EmptyTitle>What can I help with?</EmptyTitle>
-        <EmptyDescription>Ask anything. Answers stream in as Markdown, and you can stop or retry at any point.</EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
-          {suggestions.map((text) => (
-            <Button
-              key={text}
-              variant="outline"
-              className="h-auto justify-start whitespace-normal py-2.5 text-left text-sm font-normal text-muted-foreground hover:text-foreground"
-              onClick={() => onPick(text)}
-            >
-              {text}
-            </Button>
-          ))}
-        </div>
-      </EmptyContent>
-    </Empty>
-  )
+  return <section className="mx-auto max-w-lg space-y-5 py-16 text-center">
+    <GlobeIcon className="mx-auto size-9 text-muted-foreground" aria-hidden />
+    <h1 className="text-2xl font-semibold tracking-tight">Find your next opportunity.</h1>
+    <p className="text-sm leading-6 text-muted-foreground">Paste a website URL to find opportunities. I’ll explore the site and collect everything available.</p>
+    <Button variant="outline" onClick={() => onPick("Show my sources")}>Show my sources</Button>
+  </section>
 }

@@ -20,10 +20,10 @@ const SSE_HEADERS = {
  * Provider errors become a terminal `Error` event (never a mid-stream 500);
  * client disconnects interrupt the upstream stream.
  */
-export const toSseResponse = (
-  events: Stream.Stream<ChatEvent, ChatError>,
+export const toSseResponse = <R>(
+  events: Stream.Stream<ChatEvent, ChatError, R>,
   signal: AbortSignal,
-): Effect.Effect<Response> =>
+): Effect.Effect<Response, never, R> =>
   events.pipe(
     Stream.catchTag("ChatError", (e) => Stream.succeed<ChatEvent>({ _tag: "Error", message: e.message })),
     Stream.map((event) =>

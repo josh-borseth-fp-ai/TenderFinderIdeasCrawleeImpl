@@ -3,7 +3,21 @@ import { createServer } from "node:http"
 /** Deterministic websites used only by the isolated runner integration suite. */
 export async function startFixtures(): Promise<number> {
   const server = createServer((request, response) => {
-    const path = new URL(request.url ?? "/", "http://fixture.test").pathname
+    const url = new URL(request.url ?? "/", "http://fixture.test")
+    const path = url.pathname
+    if (path === "/empty") { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ bids: [], total: 0 })); return }
+    if (path === "/pages" || path === "/many") {
+      const page = Number(url.searchParams.get("page") ?? "0")
+      const count = path === "/many" ? 10005 : 1
+      response.setHeader("content-type", "application/json")
+      response.end(JSON.stringify({ bids: Array.from({ length: count }, (_, i) => ({ title: `Opportunity ${path === "/many" ? i : page}`, sourceUrl: `http://fixture.test/item/${path === "/many" ? i : page}`, evidence: `Opportunity ${path === "/many" ? i : page}`, status: "open" })), next: path === "/pages" && page < 4 ? `http://fixture.test/pages?page=${page + 1}` : null }))
+      return
+    }
+    if (path === "/interactive") {
+      response.setHeader("content-type", "text/html")
+      response.end(`<html><body><main><h1>Opportunity 0</h1><span id="number">0</span></main><button id="next">Next</button><script>let n=0; document.querySelector('button').onclick=()=>{n++;document.querySelector('main').innerHTML='<h1>Opportunity '+n+'</h1><span id="number">'+n+'</span>';if(n===4)document.querySelector('button').remove();}</script></body></html>`)
+      return
+    }
     if (path === "/robots.txt") { response.end("User-agent: *\nAllow: /\nDisallow: /forbidden"); return }
     if (path === "/json") { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ bids: [{ title: "Bridge repair", sourceUrl: "http://fixture.test/detail", evidence: "Bridge repair", status: "open" }] })); return }
     if (path === "/private-redirect") { response.writeHead(302, { location: "http://127.0.0.1/" }); response.end(); return }

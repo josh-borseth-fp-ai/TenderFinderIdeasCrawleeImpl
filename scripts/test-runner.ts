@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { execFileSync } from "node:child_process"
 import { Schema } from "effect"
 import { BidDraft, type Manifest, type Strategy } from "../runner/contract.ts"
@@ -58,9 +61,61 @@ assert.deepEqual(bounded.errors, [], JSON.stringify(bounded))
 assert.equal(bounded.visitedCount, 3, "One shared page budget, with duplicates handled by Crawlee")
 assert.equal(bounded.records.length, 2, "Cheerio and HTTP both run after the Playwright index")
 assert.match(bounded.coverage, /Bounded at 3 pages/)
+console.log("Checking persistent queues and full collection across bounded batches")
+const collectionFiles = { ...baseFiles, "runtime.json": JSON.stringify({ ...runtime, contractVersion: 2 }), "scraper.ts": code.slice(0, code.indexOf("export function discover")) + `
+export function discover(input: PageInput): RequestSpec[] {
+  const data = Schema.decodeUnknownSync(Schema.Struct({ next: Schema.NullOr(Schema.String) }))(input.json);
+  return data.next ? [{ url: data.next, label: 'index' }] : [];
+}` }
+for (const path of ["/pages", "/many"]) {
+  const directory = mkdtempSync(join(tmpdir(), "collection-test-"))
+  const records = new Map<string, unknown>()
+  let batches = 0
+  try {
+    for (;;) {
+      const m = { ...manifest("http", `http://fixture.test${path}`), limits: { maxPages: 2, maxRecords: 3, timeoutSeconds: 120 } }
+      const result = await runner.run({ ...collectionFiles, "manifest.json": JSON.stringify(m) }, ["fixture.test"], { signal, timeoutSeconds: 150, fixture: true, collectionDirectory: directory, onRecords: (items) => { for (const item of items) { const record = Schema.decodeUnknownSync(BidDraft)(item); records.set(record.sourceUrl, record) } } })
+      assert.deepEqual(result.errors, [], JSON.stringify(result))
+      assert.equal(result.records.length, 0, "Collection transport streams records instead of buffering the dataset")
+      assert.ok(++batches < 10, "Must make progress across batches")
+      if (result.collection?.complete) break
+      assert.ok(result.collection?.pending, JSON.stringify(result))
+    }
+    assert.equal(records.size, path === "/many" ? 10005 : 5)
+    if (path === "/pages") assert.ok(batches >= 3, "Must resume after the page limit")
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+}
+console.log("Checking resumable browser pagination")
+const browserDirectory = mkdtempSync(join(tmpdir(), "browser-collection-test-"))
+try {
+  const records = new Set<string>()
+  const files = { ...baseFiles, "runtime.json": JSON.stringify({ ...runtime, contractVersion: 2 }), "manifest.json": JSON.stringify({ ...manifest("playwright", "http://fixture.test/interactive"), routes: [{ label: "index", strategy: "playwright", waitFor: "h1" }], limits: { maxPages: 2, maxRecords: 3, timeoutSeconds: 120 } }), "scraper.ts": `import { load } from 'cheerio';
+export function extract(input) { const title = load(input.html)('h1').text(); return [{ title, sourceUrl: input.url + '?item=' + title.split(' ').at(-1), status: 'open', evidence: title }]; }
+export function discover() { return []; }
+export async function* browsePages(browser, input, cursor) {
+  let n = Number(cursor || 0);
+  for (let i=0; i<n; i++) await browser.click('#next');
+  while (n < 4) { await browser.click('#next'); n++; const page = await browser.snapshot(); yield { page, cursor: String(n) }; }
+}` }
+  for (let batch = 0; ; batch++) {
+    assert.ok(batch < 8)
+    const result = await runner.run(files, ["fixture.test"], { signal, timeoutSeconds: 150, fixture: true, collectionDirectory: browserDirectory, onRecords: (items) => { for (const item of items) records.add(Schema.decodeUnknownSync(BidDraft)(item).sourceUrl) } })
+    assert.deepEqual(result.errors, [], JSON.stringify(result))
+    if (result.collection?.complete) break
+    assert.ok(result.collection?.pending, JSON.stringify(result))
+  }
+  assert.equal(records.size, 5)
+} finally { rmSync(browserDirectory, { recursive: true, force: true }) }
 console.log("Checking investigation snapshots")
 const inspected = await runner.run({ "manifest.json": JSON.stringify(manifest("playwright", "http://fixture.test/rendered")) }, ["fixture.test"], { signal, timeoutSeconds: 90, inspect: true, fixture: true })
 assert.ok(inspected.evidence[0]?.html?.includes("Bridge repair"))
+const largeInspection = await runner.run({ "manifest.json": JSON.stringify(manifest("http", "http://fixture.test/many")) }, ["fixture.test"], { signal, timeoutSeconds: 90, inspect: true, fixture: true })
+assert.equal(Schema.decodeUnknownSync(Schema.Struct({ bids: Schema.Array(BidDraft) }))(largeInspection.evidence[0]?.json).bids.length, 10005, "Large inspection output must drain before worker exit")
+console.log("Checking explicit empty-source evidence")
+const empty = await runner.run({ ...baseFiles, "manifest.json": JSON.stringify(manifest("http", "http://fixture.test/empty")), "scraper.ts": code + `\nexport function expectedCount(input: PageInput) { return Schema.decodeUnknownSync(Schema.Struct({ total: Schema.Int }))(input.json).total; }` }, ["fixture.test"], { signal, timeoutSeconds: 90, fixture: true })
+assert.deepEqual(empty.errors, [])
+assert.deepEqual(empty.records, [])
+assert.equal(empty.expectedCount, 0)
 console.log("Checking offline fixture tests")
 await runner.run({ ...baseFiles, "scraper.test.ts": `import { test } from 'node:test'; import assert from 'node:assert/strict'; import { extract } from './scraper.ts'; test('extracts observed bid', () => { assert.equal(extract({ url: 'http://fixture.test/detail', label: 'detail', html: '<main><h1>Bridge repair</h1></main>', json: null })[0]?.title, 'Bridge repair'); });` }, [], { signal, timeoutSeconds: 90, test: true })
 console.log("Checking empty and skipped fixture rejection")

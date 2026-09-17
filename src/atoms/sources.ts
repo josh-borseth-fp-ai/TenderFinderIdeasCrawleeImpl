@@ -2,20 +2,12 @@ import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { Atom, AtomHttpApi, AsyncResult, Reactivity } from "effect/unstable/reactivity"
 import { SourceApi } from "@/domain/SourceApi"
-import { ProgressEvent, SourceError, type SourceDetail } from "@/domain/Source"
+import { ProgressEvent, SourceError } from "@/domain/Source"
 
 export class SourceClient extends AtomHttpApi.Service<SourceClient>()("@app/SourceClient", {
   api: SourceApi,
   httpClient: FetchHttpClient.layer,
 }) {}
-
-export const sourcesAtom = SourceClient.query("sources", "list", { reactivityKeys: ["sources"] })
-export const sourceDetailAtom = Atom.family((id: string) => SourceClient.query("sources", "detail", { params: { id }, reactivityKeys: ["sources"] }))
-export const sourceFilesAtom = Atom.family((id: string) => SourceClient.query("sources", "files", { params: { id } }))
-export const sourceCommandAtom = SourceClient.mutation("sources", "command")
-export const noDetailAtom = Atom.make<AsyncResult.AsyncResult<SourceDetail, SourceError>>(AsyncResult.initial())
-export const noFilesAtom = Atom.make(AsyncResult.success<Record<string, string>>({}))
-export const noEventsAtom = Atom.make(AsyncResult.success<ProgressEvent[]>([]))
 
 // Native EventSource owns reconnection and Last-Event-ID; the atom owns its lifetime.
 export const sourceEventsAtom = Atom.family((id: string) => SourceClient.runtime.atom(

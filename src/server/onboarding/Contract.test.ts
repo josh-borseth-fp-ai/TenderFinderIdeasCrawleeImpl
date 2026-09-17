@@ -33,7 +33,8 @@ describe("shared runner boundary schemas", () => {
     const decode = Schema.decodeUnknownSync(RuntimePin)
     expect(decode({ image: `sha256:${"a".repeat(64)}`, contractVersion: 1 }).contractVersion).toBe(1)
     expect(() => decode({ image: "mutable:latest", contractVersion: 1 })).toThrow()
-    expect(() => decode({ image: `sha256:${"a".repeat(64)}`, contractVersion: 2 })).toThrow()
+    expect(decode({ image: `sha256:${"a".repeat(64)}`, contractVersion: 2 }).contractVersion).toBe(2)
+    expect(() => decode({ image: `sha256:${"a".repeat(64)}`, contractVersion: 3 })).toThrow()
   })
 
   it("preserves optional and nullable extraction fields while rejecting invalid facts", () => {

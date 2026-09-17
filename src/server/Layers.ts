@@ -2,6 +2,7 @@ import { OpenRouterClient, OpenRouterLanguageModel } from "@effect/ai-openrouter
 import { Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { AppConfig } from "./AppConfig.ts"
+import { ConversationIntentModel } from "./ConversationIntentModel.ts"
 import { ChatService } from "./ChatService.ts"
 import { Scraper } from "./Scraper.ts"
 import { SourceModel } from "./onboarding/SourceModel.ts"
@@ -22,7 +23,7 @@ const OpenRouterLive = Layer.unwrap(
 ).pipe(Layer.provide(FetchHttpClient.layer))
 
 /** Everything the API routes need: ChatService plus AppConfig for the info endpoint. */
-export const appLayer = Layer.mergeAll(ChatService.layer, SourceModel.layer).pipe(
+export const appLayer = Layer.mergeAll(ChatService.layer, SourceModel.layer, ConversationIntentModel.layer).pipe(
   Layer.provide(Scraper.layer),
   Layer.provide(OpenRouterLive),
   Layer.provideMerge(AppConfig.layer),

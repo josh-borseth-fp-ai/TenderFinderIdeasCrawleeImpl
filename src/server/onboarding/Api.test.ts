@@ -48,6 +48,16 @@ describe("typed source API", () => {
     expect((await sourceDataApi(request({ action: "create", brief: emptyBrief() }, { origin: "https://elsewhere.example" }))).status).toBe(403)
     expect(service.list()).toHaveLength(0)
   })
+  it("round-trips saved conversations and rejects invalid conversation mutations and pages", async () => {
+    const post = (path: string, body: unknown, origin = "http://localhost") => sourceDataApi(new Request(`http://localhost/api/source-data/${path}`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) }))
+    expect((await post("conversations", { id: "chat" })).status).toBe(200)
+    expect((await post("conversations", { id: "" })).status).toBe(400)
+    expect((await post("conversations", { id: "foreign" }, "https://elsewhere.example")).status).toBe(403)
+    expect((await sourceDataApi(new Request("http://localhost/api/source-data/conversation/chat"))).status).toBe(200)
+    expect((await post("conversation-action", { requestId: "one", conversationId: "chat", sourceId: "missing", action: "invented" })).status).toBe(400)
+    expect((await sourceDataApi(new Request("http://localhost/api/source-data/results/missing?page=NaN"))).status).toBe(400)
+    expect(service.store.conversations().map((conversation) => conversation.id)).toEqual(["chat"])
+  })
   it("replays progress after Last-Event-ID and closes the stream on cancellation", async () => {
     const source = service.store.create(emptyBrief("Procurement", "https://example.com"))
     const job = await service.command({ action: "generate", sourceId: source.id })
